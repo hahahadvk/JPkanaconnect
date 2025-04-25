@@ -262,7 +262,7 @@ export default function Home() {
       }
 
       if (characterSet.find(char => char.jp === selectedTile.content && char.rm === tile.content) ||
-        characterSet.find(char => char.rm === tile.content && char.jp === tile.content)) {
+        characterSet.find(char => char.rm === selectedTile.content && char.jp === tile.content)) {
         // Correct match
         const updatedGrid = grid.map((t, i) => {
           if (i === selectedTileIndex || i === index) {
@@ -318,14 +318,6 @@ export default function Home() {
     };
 
     if (incorrectMatch) {
-      // setGrid(prevGrid => {
-      //   return prevGrid.map((tile, i) => {
-      //     if (i === index1 || i === index2) {
-      //       return { ...tile, selected: false };
-      //     }
-      //     return tile;
-      //   });
-      // });
       if (tile1Element) {
         tile1Element.classList.add('shake');
         tile1Element.style.border = '2px solid hsl(var(--incorrect-border-color))';
@@ -620,6 +612,7 @@ export default function Home() {
     </div>
   );
 }
+
 
 
 
