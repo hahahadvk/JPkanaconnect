@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
-import { QuestionMarkCircle } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -244,7 +244,7 @@ export default function Home() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="outline" onClick={() => setShowHint(!showHint)}>
-                  Hint <QuestionMarkCircle className="ml-2 h-4 w-4" />
+                  Hint <HelpCircle className="ml-2 h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
