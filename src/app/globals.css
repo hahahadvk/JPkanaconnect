@@ -42,6 +42,10 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
+    --tile-background: 210 40% 96.1%; /* Light mode tile background */
+    --tile-text: 222.2 84% 4.9%; /* Light mode tile text */
+    --tile-border: 214.3 31.8% 91.4%; /* Light mode tile border */
+
     --warm-1: 9 96% 66%;
     --warm-2: 25 91% 73%;
     --warm-3: 41 89% 68%;
@@ -54,6 +58,7 @@ body {
     --cool-4: 261 44% 64%;
     --cool-5: 207 55% 59%;
   }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -87,6 +92,10 @@ body {
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --tile-background: 217.2 32.6% 17.5%; /* Dark mode tile background */
+    --tile-text: 210 40% 98%; /* Dark mode tile text */
+    --tile-border: 216 34% 17%; /* Dark mode tile border */
   }
 }
 

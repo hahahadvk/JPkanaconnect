@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useTheme } from "@/hooks/use-theme";
 
 const hiraganaCharacters = {
   basic: [
@@ -90,27 +91,32 @@ type CharacterSet = { jp: string; rm: string; }[];
 const warmPalette = ["hsl(var(--warm-1))", "hsl(var(--warm-2))", "hsl(var(--warm-3))", "hsl(var(--warm-4))", "hsl(var(--warm-5))"];
 const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool-3))", "hsl(var(--cool-4))", "hsl(var(--cool-5))"];
 
-const initialGridSize = "15x10";
+const initialGridSize = "15x10"; // Default grid size
+const initialGridStructure = "15x10 Double Layer"; // Default grid structure
 
 type Tile = {
   content: string;
   color: string;
   matched: boolean;
+  layer: number; // 1 or 2
   index: number;
 };
 
 export default function Home() {
   const [gridSize, setGridSize] = useState(initialGridSize);
+  const [gridStructure, setGridStructure] = useState(initialGridStructure);
   const [mode, setMode] = useState<"hiragana" | "katakana">("hiragana");
   const [grid, setGrid] = useState<Tile[]>([]);
   const [selectedTiles, setSelectedTiles] = useState<number[]>([]);
   const [showHint, setShowHint] = useState(false);
   const [characterSet, setCharacterSet] = useState<CharacterSet>([]);
   const [gameWon, setGameWon] = useState(false);
+  const { theme } = useTheme(); // Access the current theme
 
   const numRows = parseInt(gridSize.split("x")[0]);
   const numCols = parseInt(gridSize.split("x")[1]);
-  const totalTiles = numRows * numCols;
+  const isDoubleLayer = gridStructure.includes("Double Layer");
+  const totalTiles = numRows * numCols * (isDoubleLayer ? 2 : 1);
 
   useEffect(() => {
     setCharacterSet(mode === "hiragana" ? [
@@ -126,7 +132,7 @@ export default function Home() {
 
   useEffect(() => {
     generateGrid();
-  }, [gridSize, mode, characterSet]);
+  }, [gridSize, gridStructure, mode, characterSet, theme]); // Regenerate grid when theme changes
 
   useEffect(() => {
     // Check win condition whenever the grid changes
@@ -143,31 +149,60 @@ export default function Home() {
     const numUniquePairs = Math.min(Math.floor(totalTiles / 2), characterSet.length);
     const selectedPairs = characterSet.slice(0, numUniquePairs);
 
-    let tiles: { content: string; color: string; }[] = [];
+    let layer1Tiles: { content: string; color: string; }[] = [];
+    let layer2Tiles: { content: string; color: string; }[] = [];
 
-    // Add unique pairs
-    selectedPairs.forEach((pair, index) => {
-      tiles.push({ content: pair.jp, color: warmPalette[index % warmPalette.length] });
-      tiles.push({ content: pair.rm, color: coolPalette[index % coolPalette.length] });
-    });
+    // Distribute pairs between layers
+    for (let i = 0; i < selectedPairs.length; i++) {
+      const pair = selectedPairs[i];
+      const warmColor = warmPalette[i % warmPalette.length];
+      const coolColor = coolPalette[i % coolPalette.length];
 
-    // Fill the rest of the grid with random pairs if needed
-    while (tiles.length < totalTiles) {
-      const randomIndex = Math.floor(Math.random() * selectedPairs.length);
-      const randomPair = selectedPairs[randomIndex];
-      tiles.push({ content: randomPair.jp, color: warmPalette[tiles.length % warmPalette.length] });
-      tiles.push({ content: randomPair.rm, color: coolPalette[tiles.length % coolPalette.length] });
+      if (i < selectedPairs.length / 2) {
+        // Add to layer 1
+        layer1Tiles.push({ content: pair.jp, color: warmColor });
+        layer1Tiles.push({ content: pair.rm, color: coolColor });
+      } else {
+        // Add to layer 2
+        layer2Tiles.push({ content: pair.jp, color: warmColor });
+        layer2Tiles.push({ content: pair.rm, color: coolColor });
+      }
     }
 
-    // Shuffle the tiles
-    const shuffledTiles = tiles.sort(() => Math.random() - 0.5);
+    // Fill the rest of the layers with random pairs if needed
+    while (layer1Tiles.length < totalTiles / 2) {
+      const randomIndex = Math.floor(Math.random() * selectedPairs.length);
+      const randomPair = selectedPairs[randomIndex];
+      layer1Tiles.push({ content: randomPair.jp, color: warmPalette[layer1Tiles.length % warmPalette.length] });
+      layer1Tiles.push({ content: randomPair.rm, color: coolPalette[layer1Tiles.length % coolPalette.length] });
+    }
 
-    // Create grid with index and matched status
-    const initialGrid = shuffledTiles.slice(0, totalTiles).map((tile, index) => ({
-      ...tile,
-      matched: false,
-      index: index
-    }));
+    while (layer2Tiles.length < totalTiles / 2) {
+      const randomIndex = Math.floor(Math.random() * selectedPairs.length);
+      const randomPair = selectedPairs[randomIndex];
+      layer2Tiles.push({ content: randomPair.jp, color: warmPalette[layer2Tiles.length % warmPalette.length] });
+      layer2Tiles.push({ content: randomPair.rm, color: coolPalette[layer2Tiles.length % coolPalette.length] });
+    }
+
+    // Shuffle the tiles within each layer
+    const shuffledLayer1Tiles = layer1Tiles.sort(() => Math.random() - 0.5);
+    const shuffledLayer2Tiles = layer2Tiles.sort(() => Math.random() - 0.5);
+
+    // Create grid with index, layer, and matched status
+    const initialGrid = [
+      ...shuffledLayer1Tiles.slice(0, totalTiles / 2).map((tile, index) => ({
+        ...tile,
+        matched: false,
+        layer: 1,
+        index: index
+      })),
+      ...shuffledLayer2Tiles.slice(0, totalTiles / 2).map((tile, index) => ({
+        ...tile,
+        matched: false,
+        layer: 2,
+        index: index + totalTiles / 2 // Adjust index for the second layer
+      }))
+    ];
 
     setGrid(initialGrid);
     setSelectedTiles([]);
@@ -186,19 +221,51 @@ export default function Home() {
       const tile1 = grid[index1];
       const tile2 = grid[index2];
 
-      if (characterSet.find(char => char.jp === tile1.content && char.rm === tile2.content) ||
-        characterSet.find(char => char.rm === tile1.content && char.jp === tile2.content)) {
-        // Correct match
-        const updatedGrid = grid.map((tile, i) =>
-          i === index1 || i === index2 ? { ...tile, matched: true } : tile
-        );
-        setGrid(updatedGrid);
-        setSelectedTiles([]);
-      } else {
-        // Incorrect match - reset selected tiles after a delay
+      if (tile1.layer !== tile2.layer) {
+        // Tiles must be on the same layer.  Provide visual feedback
         setTimeout(() => {
           setSelectedTiles([]);
         }, 700);
+        return;
+      }
+
+      if (characterSet.find(char => char.jp === tile1.content && char.rm === tile2.content) ||
+        characterSet.find(char => char.rm === tile1.content && char.jp === tile2.content)) {
+        // Correct match
+        const updatedGrid = grid.map((tile, i) => {
+          if (i === index1 || i === index2) {
+            // Reveal the tile on layer 2 if matched on layer 1
+            const tileBelowIndex = (tile.layer === 1) ? i + (grid.length / 2) : i;
+            return { ...tile, matched: true };
+          } else {
+            return tile;
+          }
+        });
+        setGrid(updatedGrid);
+        setSelectedTiles([]);
+      } else {
+        // Incorrect match - reset selected tiles after a delay and add shake animation
+        const tile1Element = document.getElementById(`tile-${index1}`);
+        const tile2Element = document.getElementById(`tile-${index2}`);
+
+        if (tile1Element && tile2Element) {
+          tile1Element.classList.add('shake');
+          tile2Element.classList.add('shake');
+          tile1Element.style.border = '2px solid red';  // Add red border
+          tile2Element.style.border = '2px solid red';  // Add red border
+
+          setTimeout(() => {
+            setSelectedTiles([]);
+            tile1Element.classList.remove('shake');
+            tile2Element.classList.remove('shake');
+            tile1Element.style.border = '';  // Remove red border
+            tile2Element.style.border = '';  // Remove red border
+          }, 700);
+        } else {
+          setTimeout(() => {
+            setSelectedTiles([]);
+          }, 700);
+        }
       }
     }
   };
@@ -234,7 +301,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2">
+    <div className={`flex flex-col items-center justify-center min-h-screen py-2 ${theme === 'dark' ? 'dark' : ''}`}>
       <header className="w-full flex justify-between items-center p-4">
         <h1 className="text-2xl font-bold">KanaMatch</h1>
         <div className="flex items-center gap-2">
@@ -244,13 +311,24 @@ export default function Home() {
 
       <main className="flex flex-col items-center justify-center w-full flex-1 px-4 text-center">
         <div className="flex flex-col md:flex-row gap-4 mb-4">
+
+          <Select value={gridStructure} onValueChange={setGridStructure}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Select grid structure" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="15x10 Double Layer">15x10 Double Layer</SelectItem>
+              <SelectItem value="10x10 Double Layer">10x10 Double Layer</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={gridSize} onValueChange={setGridSize}>
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Select grid size" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="15x10">15x10</SelectItem>
-              <SelectItem value="20x10">20x10</SelectItem>
+              <SelectItem value="10x10">10x10</SelectItem>
             </SelectContent>
           </Select>
 
@@ -285,19 +363,52 @@ export default function Home() {
           width: "100%",
           maxWidth: `${numCols * 60}px`,
         }}>
-          {grid.map((tile, index) => (
+          {grid.filter(tile => tile.layer === 1).map((tile, index) => (
             <button
               key={index}
+              id={`tile-${tile.index}`}
               className={`relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold
-                            ${selectedTiles.includes(index) ? 'bg-muted' : 'bg-secondary'}
-                            ${tile.matched ? 'opacity-50' : ''}
+                            bg-tile-background text-tile-text
                             transition-all duration-300
                             shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary
-                            ${selectedTiles.includes(index) ? 'cursor-default' : 'cursor-pointer'}
+                            cursor-pointer
+                            ${selectedTiles.includes(tile.index) ? 'cursor-default' : 'cursor-pointer'}
+                            ${tile.matched ? 'opacity-0 pointer-events-none' : ''} // Make matched tiles disappear
+                             ${selectedTiles.includes(tile.index) ? 'bg-muted' : ''}
+                             `}
+              style={{
+                color: tile.color,
+                border: `1px solid var(--tile-border)`,
+                visibility: tile.matched && tile.layer === 1 ? 'hidden' : 'visible'
+              }}
+              onClick={() => handleTileClick(tile.index)}
+              disabled={selectedTiles.includes(tile.index) || tile.matched}
+            >
+              {tile.content}
+            </button>
+          ))}
+
+          {/* Layer 2 tiles (initially hidden) */}
+          {grid.filter(tile => tile.layer === 2).map((tile, index) => (
+            <button
+              key={index + totalTiles / 2}  // Ensure unique keys
+              id={`tile-${tile.index}`}
+              className={`relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold
+                            bg-tile-background text-tile-text
+                            transition-all duration-300
+                            shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary
+                            cursor-pointer
+                            ${selectedTiles.includes(tile.index) ? 'cursor-default' : 'cursor-pointer'}
+                            ${tile.matched ? 'opacity-0 pointer-events-none' : ''} // Make matched tiles disappear
+                             ${selectedTiles.includes(tile.index) ? 'bg-muted' : ''}
                             `}
-              style={{ color: tile.color, visibility: tile.matched ? 'hidden' : 'visible' }}
-              onClick={() => handleTileClick(index)}
-              disabled={selectedTiles.includes(index) || tile.matched}
+              style={{
+                color: tile.color,
+                border: `1px solid var(--tile-border)`,
+                visibility: tile.matched ? 'hidden' : 'hidden' // Initially hidden
+              }}
+            onClick={() => handleTileClick(tile.index)}
+            disabled={selectedTiles.includes(tile.index) || tile.matched}
             >
               {tile.content}
             </button>
@@ -313,6 +424,26 @@ export default function Home() {
       <footer className="w-full border-t border-border p-4 text-center text-sm">
         &copy; 2024 KanaMatch. All rights reserved.
       </footer>
+      <style jsx>{`
+        .shake {
+          animation: shake 0.5s;
+          animation-iteration-count: 1;
+        }
+
+        @keyframes shake {
+          0% { transform: translate(1px, 1px) rotate(0deg); }
+          10% { transform: translate(-1px, -2px) rotate(-1deg); }
+          20% { transform: translate(-3px, 0px) rotate(1deg); }
+          30% { transform: translate(3px, 2px) rotate(0deg); }
+          40% { transform: translate(1px, -1px) rotate(1deg); }
+          50% { transform: translate(-1px, 2px) rotate(-1deg); }
+          60% { transform: translate(-3px, 1px) rotate(0deg); }
+          70% { transform: translate(3px, 1px) rotate(-1deg); }
+          80% { transform: translate(-1px, -1px) rotate(1deg); }
+          90% { transform: translate(1px, 2px) rotate(0deg); }
+          100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+      `}</style>
     </div>
   );
 }
