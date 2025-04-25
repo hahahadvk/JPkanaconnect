@@ -45,6 +45,8 @@ body {
     --tile-background: 210 40% 96.1%; /* Light mode tile background */
     --tile-text: 222.2 84% 4.9%; /* Light mode tile text */
     --tile-border: 214.3 31.8% 91.4%; /* Light mode tile border */
+    --tile-selected-background: 220 5.9% 10%;
+    --tile-selected-text: 0 0% 98%;
 
     --warm-1: 9 96% 66%;
     --warm-2: 25 91% 73%;
@@ -96,6 +98,8 @@ body {
     --tile-background: 217.2 32.6% 17.5%; /* Dark mode tile background */
     --tile-text: 210 40% 98%; /* Dark mode tile text */
     --tile-border: 216 34% 17%; /* Dark mode tile border */
+    --tile-selected-background: 224.3 76.3% 48%;
+    --tile-selected-text: 0 0% 9%;
   }
 }
 
@@ -107,4 +111,5 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
 

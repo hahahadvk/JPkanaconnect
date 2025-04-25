@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
 import { HelpCircle } from "lucide-react";
 import {
@@ -15,6 +14,7 @@ import {
 import { useTheme } from "@/hooks/use-theme";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const hiraganaCharacters = {
   basic: [
@@ -93,16 +93,16 @@ type CharacterSet = { jp: string; rm: string; }[];
 const warmPalette = ["hsl(var(--warm-1))", "hsl(var(--warm-2))", "hsl(var(--warm-3))", "hsl(var(--warm-4))", "hsl(var(--warm-5))"];
 const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool-3))", "hsl(var(--cool-4))", "hsl(var(--cool-5))"];
 
-const initialGridSize = "15x10"; // Default grid size
-const initialGridStructure = "15x10 Double Layer"; // Default grid structure
+const initialGridSize = "15x10";
+const initialGridStructure = "15x10 Double Layer";
 
 type Tile = {
   content: string;
   color: string;
   matched: boolean;
-  layer: number; // 1 or 2
+  layer: number;
   index: number;
-  selected: boolean; // Added selected state
+  selected: boolean;
 };
 
 export default function Home() {
@@ -110,11 +110,11 @@ export default function Home() {
   const [gridStructure, setGridStructure] = useState(initialGridStructure);
   const [mode, setMode] = useState<"hiragana" | "katakana">("hiragana");
   const [grid, setGrid] = useState<Tile[]>([]);
-  const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null); // Only one tile can be selected at a time
-  const [showHint, setShowHint] = useState(false);
+  const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
   const [characterSet, setCharacterSet] = useState<CharacterSet>([]);
   const [gameWon, setGameWon] = useState(false);
-  const { theme } = useTheme(); // Access the current theme
+  const { theme } = useTheme();
+  const [isHintOpen, setIsHintOpen] = useState(false);
 
   const numRows = parseInt(gridSize.split("x")[0]);
   const numCols = parseInt(gridSize.split("x")[1]);
@@ -135,10 +135,9 @@ export default function Home() {
 
   useEffect(() => {
     generateGrid();
-  }, [gridSize, gridStructure, mode, characterSet, theme]); // Regenerate grid when theme changes
+  }, [gridSize, gridStructure, mode, characterSet, theme]);
 
   useEffect(() => {
-    // Check win condition whenever the grid changes
     if (grid.length > 0 && grid.every(tile => tile.matched)) {
       setGameWon(true);
     } else {
@@ -155,24 +154,20 @@ export default function Home() {
     let layer1Tiles: { content: string; color: string; }[] = [];
     let layer2Tiles: { content: string; color: string; }[] = [];
 
-    // Distribute pairs between layers
     for (let i = 0; i < selectedPairs.length; i++) {
       const pair = selectedPairs[i];
       const warmColor = warmPalette[i % warmPalette.length];
       const coolColor = coolPalette[i % coolPalette.length];
 
       if (i < selectedPairs.length / 2) {
-        // Add to layer 1
         layer1Tiles.push({ content: pair.jp, color: warmColor });
         layer1Tiles.push({ content: pair.rm, color: coolColor });
       } else {
-        // Add to layer 2
         layer2Tiles.push({ content: pair.jp, color: warmColor });
         layer2Tiles.push({ content: pair.rm, color: coolColor });
       }
     }
 
-    // Fill the rest of the layers with random pairs if needed
     while (layer1Tiles.length < totalTiles / 2) {
       const randomIndex = Math.floor(Math.random() * selectedPairs.length);
       const randomPair = selectedPairs[randomIndex];
@@ -187,103 +182,92 @@ export default function Home() {
       layer2Tiles.push({ content: randomPair.rm, color: coolPalette[layer2Tiles.length % coolPalette.length] });
     }
 
-    // Shuffle the tiles within each layer
     const shuffledLayer1Tiles = layer1Tiles.sort(() => Math.random() - 0.5);
     const shuffledLayer2Tiles = layer2Tiles.sort(() => Math.random() - 0.5);
 
-    // Create grid with index, layer, and matched status
     const initialGrid = [
       ...shuffledLayer1Tiles.slice(0, totalTiles / 2).map((tile, index) => ({
         ...tile,
         matched: false,
         layer: 1,
         index: index,
-        selected: false // Initialize selected state
+        selected: false
       })),
       ...shuffledLayer2Tiles.slice(0, totalTiles / 2).map((tile, index) => ({
         ...tile,
         matched: false,
         layer: 2,
-        index: index + totalTiles / 2, // Adjust index for the second layer
-        selected: false // Initialize selected state
+        index: index + totalTiles / 2,
+        selected: false
       }))
     ];
 
     setGrid(initialGrid);
-    setSelectedTileIndex(null); // Reset selected tile
+    setSelectedTileIndex(null);
   };
 
   const handleTileClick = (index: number) => {
     const tile = grid[index];
 
     if (!tile || tile.matched) {
-      return; // Do nothing if tile is already matched or doesn't exist
+      return;
     }
 
     if (selectedTileIndex === null) {
-      // First tile selection
       setSelectedTileIndex(index);
       setGrid(prevGrid => {
         return prevGrid.map((t, i) => i === index ? { ...t, selected: true } : t);
       });
     } else if (selectedTileIndex === index) {
-      // Deselect the same tile
       setGrid(prevGrid => {
         return prevGrid.map((t, i) => i === index ? { ...t, selected: false } : t);
       });
       setSelectedTileIndex(null);
     } else {
-      // Second tile selection
       const selectedTile = grid[selectedTileIndex];
 
       if (selectedTile.layer !== tile.layer) {
-        // Tiles must be on the same layer. Provide visual feedback
         resetSelection(index, selectedTileIndex, false);
         return;
       }
 
       if (characterSet.find(char => char.jp === selectedTile.content && char.rm === tile.content) ||
         characterSet.find(char => char.rm === selectedTile.content && char.jp === tile.content)) {
-        // Correct match
         const updatedGrid = grid.map((t, i) => {
           if (i === selectedTileIndex || i === index) {
-            return { ...t, matched: true, selected: false }; //clear selection
+            return { ...t, matched: true, selected: false };
           }
           return t;
         });
         setGrid(updatedGrid);
-        // Reveal the tile on layer 2 if matched on layer 1
         if (selectedTile.layer === 1) {
-          // Trigger re-render to show Layer 2 tile underneath
-
           setGrid(prevGrid => {
             return prevGrid.map((t, i) => {
               if (i === selectedTileIndex) {
                 const tileBelowIndex = i + (grid.length / 2);
-                return { ...t, matched: true, selected: false }; //clear selection
+                return { ...t, matched: true, selected: false };
               }
               return t;
             });
           });
         }
 
+        resetSelection(index, selectedTileIndex, false); //clear selection
         setSelectedTileIndex(null);
       } else {
-        // Incorrect match - reset selected tiles after a delay and add shake animation
         resetSelection(index, selectedTileIndex, true);
       }
     }
   };
 
   const resetSelection = (index1: number, index2: number | null, incorrectMatch: boolean) => {
-    //reset selection and apply shaking animation or remove highlight
     const tile1Element = document.getElementById(`tile-${index1}`);
     const tile2Element = index2 !== null ? document.getElementById(`tile-${index2}`) : null;
 
     const reset = () => {
       setSelectedTileIndex(null);
       setGrid(prevGrid => {
-        return prevGrid.map((t, i) => ({ ...t, selected: false })); //clear selection
+        return prevGrid.map((t, i) => ({ ...t, selected: false }));
       });
       if (tile1Element) {
         tile1Element.classList.remove('shake');
@@ -296,6 +280,14 @@ export default function Home() {
     };
 
     if (incorrectMatch) {
+      setGrid(prevGrid => {
+        return prevGrid.map((tile, i) => {
+          if (i === index1 || i === index2) {
+            return { ...tile, selected: false };
+          }
+          return tile;
+        });
+      });
       if (tile1Element) {
         tile1Element.classList.add('shake');
         tile1Element.style.border = '2px solid red';
@@ -306,7 +298,14 @@ export default function Home() {
       }
       setTimeout(reset, 700);
     } else {
-      setTimeout(reset, 200); //just remove highlight on same tile click
+      setGrid(prevGrid => {
+        return prevGrid.map((tile, i) => {
+          if (i === index1 || i === index2) {
+            return { ...tile, selected: false };
+          }
+          return tile;
+        });
+      });
     }
   };
 
@@ -321,16 +320,15 @@ export default function Home() {
 
   const speak = useCallback((text: string) => {
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ja-JP'; // Set the language to Japanese
+    utterance.lang = 'ja-JP';
 
-    // Attempt to set a Japanese voice
     const voices = window.speechSynthesis.getVoices();
-    const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP');
+    const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP' && !voice.name.includes('Microsoft'));
+
     if (japaneseVoice) {
       utterance.voice = japaneseVoice;
     } else {
-      // Fallback: Log a message if no Japanese voice is found.
-      console.warn("No Japanese voice found. Using default voice.");
+      console.warn("No suitable Japanese voice found. Using default voice.");
     }
 
     window.speechSynthesis.speak(utterance);
@@ -340,29 +338,43 @@ export default function Home() {
     const characters = mode === "hiragana" ? hiraganaCharacters : katakanaCharacters;
 
     return (
-      <div className="flex flex-col">
-        {Object.keys(characters).map((key) => (
-          <div key={key} className="mb-4">
-            <h3 className="font-bold capitalize mb-2">{key}</h3>
-            <div className="flex flex-wrap gap-4">
-              {characters[key as keyof typeof characters].map((char, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <button
-                    className="text-2xl font-bold cursor-pointer"
-                    style={{ color: warmPalette[index % warmPalette.length] }}
-                    onClick={() => speak(char.jp)}
-                  >
-                    {char.jp}
-                  </button>
-                  <span style={{ color: coolPalette[index % coolPalette.length] }}>{char.rm}</span>
-                </div>
-              ))}
-            </div>
+      <Tabs defaultValue="basic" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="basic">Basic (基本)</TabsTrigger>
+          <TabsTrigger value="diacritic">Diacritics (濁音/半濁音)</TabsTrigger>
+          <TabsTrigger value="contracted">Contracted (拗音)</TabsTrigger>
+        </TabsList>
+        <TabsContent value="basic">
+          <HintContent characters={characters.basic} speak={speak} palette={warmPalette} />
+        </TabsContent>
+        <TabsContent value="diacritic">
+          <HintContent characters={characters.diacritic} speak={speak} palette={warmPalette} />
+        </TabsContent>
+        <TabsContent value="contracted">
+          <HintContent characters={characters.contracted} speak={speak} palette={warmPalette} />
+        </TabsContent>
+      </Tabs>
+    );
+  };
+
+  const HintContent = ({ characters, speak, palette }: { characters: { jp: string; rm: string; }[]; speak: (text: string) => void; palette: string[] }) => (
+    <div className="border p-4 rounded-md">
+      <div className="flex flex-wrap gap-6">
+        {characters.map((char, index) => (
+          <div key={index} className="flex items-center gap-4">
+            <button
+              className="text-2xl font-bold cursor-pointer"
+              style={{ color: palette[index % palette.length] }}
+              onClick={() => speak(char.jp)}
+            >
+              {char.jp}
+            </button>
+            <span style={{ color: "hsl(var(--cool-3))" }}>{char.rm}</span>
           </div>
         ))}
       </div>
-    );
-  };
+    </div>
+  );
 
   return (
     <div className={`flex flex-col items-center justify-center min-h-screen py-2 ${theme === 'dark' ? 'dark' : ''}`}>
@@ -400,7 +412,7 @@ export default function Home() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Dialog>
+                <Dialog open={isHintOpen} onOpenChange={setIsHintOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline">
                       Hint <HelpCircle className="ml-2 h-4 w-4" />
@@ -441,11 +453,10 @@ export default function Home() {
                 "bg-tile-background text-tile-text transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary",
                 "cursor-pointer",
                 { "cursor-default": tile.selected },
-                { "opacity-0 pointer-events-none": tile.matched }, // Make matched tiles disappear
-                { "bg-muted": tile.selected },
-                tile.selected ? "border-2 border-blue-500" : "border border-tile-border", //Blue Border on selection
+                { "opacity-0 pointer-events-none": tile.matched },
+                { "bg-muted text-tile-selected-text border-2 border-blue-500": tile.selected },
+                "border border-tile-border",
                 tile.matched ? 'opacity-0 pointer-events-none' : ''
-
               )}
               style={{
                 color: tile.color,
@@ -458,23 +469,22 @@ export default function Home() {
             </button>
           ))}
 
-          {/* Layer 2 tiles (initially hidden) */}
           {grid.filter(tile => tile.layer === 2).map((tile, index) => (
             <button
-              key={index + totalTiles / 2}  // Ensure unique keys
+              key={index + totalTiles / 2}
               id={`tile-${tile.index}`}
               className={cn(
                 "relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold",
                 "bg-tile-background text-tile-text transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary",
                 "cursor-pointer",
                 { "cursor-default": tile.selected },
-                { "opacity-0 pointer-events-none": tile.matched }, // Make matched tiles disappear
-                { "bg-muted": tile.selected },
-                tile.selected ? "border-2 border-blue-500" : "border border-tile-border" //Blue Border on selection
+                { "opacity-0 pointer-events-none": tile.matched },
+                { "bg-muted text-tile-selected-text border-2 border-blue-500": tile.selected },
+                "border border-tile-border"
               )}
               style={{
                 color: tile.color,
-                visibility: tile.matched ? 'hidden' : 'hidden' // Initially hidden
+                visibility: tile.matched ? 'hidden' : 'hidden'
               }}
               onClick={() => handleTileClick(tile.index)}
               disabled={tile.matched}
@@ -516,3 +526,4 @@ export default function Home() {
     </div>
   );
 }
+
