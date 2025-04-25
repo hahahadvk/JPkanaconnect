@@ -53,7 +53,7 @@ const hiraganaCharacters = {
 };
 
 const katakanaCharacters = {
-  basic: [
+ basic: [
     { jp: "ア", rm: "a" }, { jp: "イ", rm: "i" }, { jp: "ウ", rm: "u" }, { jp: "エ", rm: "e" }, { jp: "オ", rm: "o" },
     { jp: "カ", rm: "ka" }, { jp: "キ", rm: "ki" }, { jp: "ク", rm: "ku" }, { jp: "ケ", rm: "ke" }, { jp: "コ", rm: "ko" },
     { jp: "サ", rm: "sa" }, { jp: "シ", rm: "shi" }, { jp: "ス", rm: "su" }, { jp: "セ", rm: "se" }, { jp: "ソ", rm: "so" },
@@ -410,23 +410,33 @@ export default function Home() {
           <TabsTrigger value="contracted">Contracted (拗音)</TabsTrigger>
         </TabsList>
         <TabsContent value="basic">
-          <HintContent characters={characters.basic} speak={speak} palette={warmPalette} />
+          <HintContent characters={sortCharacters(characters.basic)} speak={speak} palette={warmPalette} />
         </TabsContent>
         <TabsContent value="diacritic">
-          <HintContent characters={characters.diacritic} speak={speak} palette={warmPalette} />
+          <HintContent characters={sortCharacters(characters.diacritic)} speak={speak} palette={warmPalette} />
         </TabsContent>
         <TabsContent value="contracted">
-          <HintContent characters={characters.contracted} speak={speak} palette={warmPalette} />
+          <HintContent characters={sortCharacters(characters.contracted)} speak={speak} palette={warmPalette} />
         </TabsContent>
       </Tabs>
     );
   };
 
+  // Function to sort characters in a i u e o order
+  const sortCharacters = (characters: { jp: string; rm: string; }[]) => {
+    const order = ['a', 'i', 'u', 'e', 'o'];
+    return [...characters].sort((a, b) => {
+      const indexA = order.indexOf(a.rm.charAt(0));
+      const indexB = order.indexOf(b.rm.charAt(0));
+      return indexA - indexB;
+    });
+  };
+
   const HintContent = ({ characters, speak, palette }: { characters: { jp: string; rm: string; }[]; speak: (text: string) => void; palette: string[] }) => (
-    <div className="border p-4 rounded-md">
-      <div className="flex flex-wrap gap-6">
+    <div className="border p-4 rounded-md max-h-[400px] overflow-y-auto">
+      <div className="grid grid-cols-5 gap-4">
         {characters.map((char, index) => (
-          <div key={index} className="flex items-center gap-4">
+          <div key={index} className="flex flex-col items-center gap-2">
             <button
               className="text-2xl font-bold cursor-pointer"
               style={{ color: palette[index % palette.length] }}
@@ -610,5 +620,6 @@ export default function Home() {
     </div>
   );
 }
+
 
 
