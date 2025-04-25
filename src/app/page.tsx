@@ -106,6 +106,7 @@ type Tile = {
 };
 
 export default function Home() {
+  // Game State
   const [gridSize, setGridSize] = useState(initialGridSize);
   const [gridStructure, setGridStructure] = useState(initialGridStructure);
   const [mode, setMode] = useState<"hiragana" | "katakana">("hiragana");
@@ -113,13 +114,39 @@ export default function Home() {
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
   const [characterSet, setCharacterSet] = useState<CharacterSet>([]);
   const [gameWon, setGameWon] = useState(false);
-  const { theme } = useTheme();
+  const { theme, setTheme: setAppTheme } = useTheme();
   const [isHintOpen, setIsHintOpen] = useState(false);
+
+  // Settings State
+  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [speechSpeed, setSpeechSpeed] = useState(0.5);
 
   const numRows = parseInt(gridSize.split("x")[0]);
   const numCols = parseInt(gridSize.split("x")[1]);
   const isDoubleLayer = gridStructure.includes("Double Layer");
   const totalTiles = numRows * numCols * (isDoubleLayer ? 2 : 1);
+
+  // --- Load settings from local storage on initial render ---
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedVoice = localStorage.getItem("selectedVoice");
+      const storedSpeed = localStorage.getItem("speechSpeed");
+      const storedTheme = localStorage.getItem("theme") as ThemeType | null;
+
+      if (storedVoice) {
+        const voice = window.speechSynthesis.getVoices().find(v => v.name === storedVoice) || null;
+        setSelectedVoice(voice);
+      }
+
+      if (storedSpeed) {
+        setSpeechSpeed(parseFloat(storedSpeed));
+      }
+
+      if (storedTheme) {
+        setAppTheme(storedTheme);
+      }
+    }
+  }, [setAppTheme]);
 
   useEffect(() => {
     setCharacterSet(mode === "hiragana" ? [
@@ -214,25 +241,29 @@ export default function Home() {
     }
 
     if (selectedTileIndex === null) {
+      // First tile selection
       setSelectedTileIndex(index);
       setGrid(prevGrid => {
         return prevGrid.map((t, i) => i === index ? { ...t, selected: true } : t);
       });
     } else if (selectedTileIndex === index) {
+      // Deselection
       setGrid(prevGrid => {
         return prevGrid.map((t, i) => i === index ? { ...t, selected: false } : t);
       });
       setSelectedTileIndex(null);
     } else {
+      // Second tile selection
       const selectedTile = grid[selectedTileIndex];
 
       if (selectedTile.layer !== tile.layer) {
-        resetSelection(index, selectedTileIndex, false);
+        resetSelection(index, selectedTileIndex, true); // Incorrect due to layer mismatch
         return;
       }
 
       if (characterSet.find(char => char.jp === selectedTile.content && char.rm === tile.content) ||
-        characterSet.find(char => char.rm === selectedTile.content && char.jp === tile.content)) {
+        characterSet.find(char => char.rm === tile.content && char.jp === tile.content)) {
+        // Correct match
         const updatedGrid = grid.map((t, i) => {
           if (i === selectedTileIndex || i === index) {
             return { ...t, matched: true, selected: false };
@@ -240,6 +271,8 @@ export default function Home() {
           return t;
         });
         setGrid(updatedGrid);
+
+        // Reveal the tile below if it was in layer 1
         if (selectedTile.layer === 1) {
           setGrid(prevGrid => {
             return prevGrid.map((t, i) => {
@@ -256,9 +289,10 @@ export default function Home() {
             });
           });
         }
-        resetSelection(index, selectedTileIndex, false); //clear selection
+        resetSelection(index, selectedTileIndex, false); // Correct match, clear selection
         setSelectedTileIndex(null);
       } else {
+        // Incorrect match
         resetSelection(index, selectedTileIndex, true);
       }
     }
@@ -284,14 +318,14 @@ export default function Home() {
     };
 
     if (incorrectMatch) {
-      setGrid(prevGrid => {
-        return prevGrid.map((tile, i) => {
-          if (i === index1 || i === index2) {
-            return { ...tile, selected: false };
-          }
-          return tile;
-        });
-      });
+      // setGrid(prevGrid => {
+      //   return prevGrid.map((tile, i) => {
+      //     if (i === index1 || i === index2) {
+      //       return { ...tile, selected: false };
+      //     }
+      //     return tile;
+      //   });
+      // });
       if (tile1Element) {
         tile1Element.classList.add('shake');
         tile1Element.style.border = '2px solid hsl(var(--incorrect-border-color))';
@@ -322,16 +356,26 @@ export default function Home() {
     generateGrid();
   };
 
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [speechSpeed, setSpeechSpeed] = useState(0.5);
+  // --- Settings Handlers ---
+  const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedVoiceName = e.target.value;
+    const voice = window.speechSynthesis.getVoices().find(v => v.name === selectedVoiceName) || null;
+    setSelectedVoice(voice);
+    localStorage.setItem("selectedVoice", selectedVoiceName); //Persist
+  };
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const voices = window.speechSynthesis.getVoices();
-      const preferredVoice = voices.find(voice => voice.name === "Microsoft Nanami Online (Natural) - Japanese (Japan)");
-      setSelectedVoice(preferredVoice || null);
-    }
-  }, []);
+  const handleSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newSpeed = parseFloat(e.target.value);
+    setSpeechSpeed(newSpeed);
+    localStorage.setItem("speechSpeed", newSpeed.toString()); //Persist
+  };
+
+  type ThemeType = "light" | "dark" | "system";
+  const handleThemeToggle = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setAppTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
 
   const speak = useCallback((text: string) => {
     if (typeof window !== 'undefined') {
@@ -448,16 +492,13 @@ export default function Home() {
                     </DialogHeader>
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center justify-between">
+                        {/* Voice Selection Dropdown */}
                         <label htmlFor="voiceSelect">Voice:</label>
                         <select
                           id="voiceSelect"
                           className="bg-background border border-input rounded-md px-2 py-1"
                           value={selectedVoice ? selectedVoice.name : ""}
-                          onChange={(e) => {
-                            const selectedVoiceName = e.target.value;
-                            const voice = window.speechSynthesis.getVoices().find(v => v.name === selectedVoiceName) || null;
-                            setSelectedVoice(voice);
-                          }}
+                          onChange={handleVoiceChange}
                         >
                           {typeof window !== 'undefined' && window.speechSynthesis.getVoices()
                             .filter(voice => voice.lang.startsWith('ja'))
@@ -467,6 +508,8 @@ export default function Home() {
                               </option>
                             ))}
                         </select>
+
+                        {/* Speed Control Slider */}
                         <label htmlFor="speedControl">Speed:</label>
                         <input
                           type="range"
@@ -475,7 +518,7 @@ export default function Home() {
                           max="1.5"
                           step="0.1"
                           value={speechSpeed}
-                          onChange={(e) => setSpeechSpeed(parseFloat(e.target.value))}
+                          onChange={handleSpeedChange}
                         />
                       </div>
                       <HintTable />
@@ -510,7 +553,7 @@ export default function Home() {
                 { "opacity-0 pointer-events-none": tile.matched },
                 "border border-tile-border",
                 tile.selected ? 'border-2' : '',
-                tile.selected ? 'border-blue-500' : '',
+                tile.selected ? 'border-green-500' : '',
                 tile.matched ? 'opacity-0 pointer-events-none' : ''
               )}
               style={{
@@ -537,7 +580,7 @@ export default function Home() {
                 { "opacity-0 pointer-events-none": tile.matched },
                 "border border-tile-border",
                 tile.selected ? 'border-2' : '',
-                tile.selected ? 'border-blue-500' : ''
+                tile.selected ? 'border-green-500' : ''
               )}
               style={{
                 color: tile.color,
@@ -556,31 +599,16 @@ export default function Home() {
           Switch to {mode === "hiragana" ? "Katakana" : "Hiragana"} Mode
         </Button>
 
+        <Button onClick={handleThemeToggle} className="mt-4">
+          Switch to {theme === "light" ? "Dark" : "Light"} Theme
+        </Button>
       </main>
 
       <footer className="w-full border-t border-border p-4 text-center text-sm">
         &copy; 2024 KanaMatch. All rights reserved.
       </footer>
-      <style jsx>{`
-        .shake {
-          animation: shake 0.5s;
-          animation-iteration-count: 1;
-        }
-
-        @keyframes shake {
-          0% { transform: translate(1px, 1px) rotate(0deg); }
-          10% { transform: translate(-1px, -2px) rotate(-1deg); }
-          20% { transform: translate(-3px, 0px) rotate(1deg); }
-          30% { transform: translate(3px, 2px) rotate(0deg); }
-          40% { transform: translate(1px, -1px) rotate(1deg); }
-          50% { transform: translate(-1px, 2px) rotate(-1deg); }
-          60% { transform: translate(-3px, 1px) rotate(0deg); }
-          70% { transform: translate(3px, 1px) rotate(-1deg); }
-          80% { transform: translate(-1px, -1px) rotate(1deg); }
-          90% { transform: translate(1px, 2px) rotate(0deg); }
-          100% { transform: translate(1px, -2px) rotate(-1deg); }
-        }
-      `}</style>
     </div>
   );
 }
+
+
