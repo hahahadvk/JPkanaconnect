@@ -274,19 +274,11 @@ export default function Home() {
 
         // Reveal the tile below if it was in layer 1
         if (selectedTile.layer === 1) {
+          const tileBelowIndex = index; // Ensure we correctly reveal at same index, not selectedTileIndex
           setGrid(prevGrid => {
-            return prevGrid.map((t, i) => {
-              if (i === selectedTileIndex) {
-                const tileBelowIndex = i + (grid.length / 2);
-                const tileBelow = prevGrid[tileBelowIndex];
-                if (tileBelow) {
-                  return { ...t, matched: true, selected: false };
-                } else {
-                  return t;
-                }
-              }
-              return t;
-            });
+            const newGrid = [...prevGrid];
+            newGrid[tileBelowIndex] = { ...newGrid[tileBelowIndex], matched: true, selected: false };
+            return newGrid;
           });
         }
         resetSelection(index, selectedTileIndex, false); // Correct match, clear selection
@@ -543,7 +535,7 @@ export default function Home() {
           width: "100%",
           maxWidth: `${numCols * 60}px`,
         }}>
-          {grid.filter(tile => tile.layer === 1).map((tile, index) => (
+          {grid.map((tile, index) => (
             <button
               key={index}
               id={`tile-${tile.index}`}
@@ -560,33 +552,7 @@ export default function Home() {
               )}
               style={{
                 color: tile.color,
-                visibility: tile.matched && tile.layer === 1 ? 'hidden' : 'visible',
-                borderColor: tile.selected ? 'hsl(var(--selected-border-color))' : ''
-              }}
-              onClick={() => handleTileClick(tile.index)}
-              disabled={tile.matched}
-            >
-              {tile.content}
-            </button>
-          ))}
-
-          {grid.filter(tile => tile.layer === 2).map((tile, index) => (
-            <button
-              key={index + totalTiles / 2}
-              id={`tile-${tile.index}`}
-              className={cn(
-                "relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold",
-                "bg-tile-background text-tile-text transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary",
-                "cursor-pointer",
-                { "cursor-default": tile.selected },
-                { "opacity-0 pointer-events-none": tile.matched },
-                "border border-tile-border",
-                tile.selected ? 'border-2' : '',
-                tile.selected ? 'border-green-500' : ''
-              )}
-              style={{
-                color: tile.color,
-                visibility: tile.matched ? 'hidden' : 'hidden',
+                visibility: (tile.layer === 2 && !grid[index - (grid.length / 2)]?.matched) || tile.layer === 1 ? 'visible' : 'hidden',
                 borderColor: tile.selected ? 'hsl(var(--selected-border-color))' : ''
               }}
               onClick={() => handleTileClick(tile.index)}
@@ -612,7 +578,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-
-
