@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useTheme } from "@/hooks/use-theme";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 const hiraganaCharacters = {
   basic: [
@@ -100,6 +102,7 @@ type Tile = {
   matched: boolean;
   layer: number; // 1 or 2
   index: number;
+  selected: boolean; // Added selected state
 };
 
 export default function Home() {
@@ -107,7 +110,7 @@ export default function Home() {
   const [gridStructure, setGridStructure] = useState(initialGridStructure);
   const [mode, setMode] = useState<"hiragana" | "katakana">("hiragana");
   const [grid, setGrid] = useState<Tile[]>([]);
-  const [selectedTiles, setSelectedTiles] = useState<number[]>([]);
+  const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null); // Only one tile can be selected at a time
   const [showHint, setShowHint] = useState(false);
   const [characterSet, setCharacterSet] = useState<CharacterSet>([]);
   const [gameWon, setGameWon] = useState(false);
@@ -194,79 +197,116 @@ export default function Home() {
         ...tile,
         matched: false,
         layer: 1,
-        index: index
+        index: index,
+        selected: false // Initialize selected state
       })),
       ...shuffledLayer2Tiles.slice(0, totalTiles / 2).map((tile, index) => ({
         ...tile,
         matched: false,
         layer: 2,
-        index: index + totalTiles / 2 // Adjust index for the second layer
+        index: index + totalTiles / 2, // Adjust index for the second layer
+        selected: false // Initialize selected state
       }))
     ];
 
     setGrid(initialGrid);
-    setSelectedTiles([]);
+    setSelectedTileIndex(null); // Reset selected tile
   };
 
   const handleTileClick = (index: number) => {
-    if (selectedTiles.length === 2 || grid[index].matched) {
-      return;
+    const tile = grid[index];
+
+    if (!tile || tile.matched) {
+      return; // Do nothing if tile is already matched or doesn't exist
     }
 
-    let newSelectedTiles = [...selectedTiles, index];
-    setSelectedTiles(newSelectedTiles);
+    if (selectedTileIndex === null) {
+      // First tile selection
+      setSelectedTileIndex(index);
+      setGrid(prevGrid => {
+        return prevGrid.map((t, i) => i === index ? { ...t, selected: true } : t);
+      });
+    } else if (selectedTileIndex === index) {
+      // Deselect the same tile
+      setGrid(prevGrid => {
+        return prevGrid.map((t, i) => i === index ? { ...t, selected: false } : t);
+      });
+      setSelectedTileIndex(null);
+    } else {
+      // Second tile selection
+      const selectedTile = grid[selectedTileIndex];
 
-    if (newSelectedTiles.length === 2) {
-      const [index1, index2] = newSelectedTiles;
-      const tile1 = grid[index1];
-      const tile2 = grid[index2];
-
-      if (tile1.layer !== tile2.layer) {
-        // Tiles must be on the same layer.  Provide visual feedback
-        setTimeout(() => {
-          setSelectedTiles([]);
-        }, 700);
+      if (selectedTile.layer !== tile.layer) {
+        // Tiles must be on the same layer. Provide visual feedback
+        resetSelection(index, selectedTileIndex, false);
         return;
       }
 
-      if (characterSet.find(char => char.jp === tile1.content && char.rm === tile2.content) ||
-        characterSet.find(char => char.rm === tile1.content && char.jp === tile2.content)) {
+      if (characterSet.find(char => char.jp === selectedTile.content && char.rm === tile.content) ||
+        characterSet.find(char => char.rm === selectedTile.content && char.jp === tile.content)) {
         // Correct match
-        const updatedGrid = grid.map((tile, i) => {
-          if (i === index1 || i === index2) {
-            // Reveal the tile on layer 2 if matched on layer 1
-            const tileBelowIndex = (tile.layer === 1) ? i + (grid.length / 2) : i;
-            return { ...tile, matched: true };
-          } else {
-            return tile;
+        const updatedGrid = grid.map((t, i) => {
+          if (i === selectedTileIndex || i === index) {
+            return { ...t, matched: true, selected: false }; //clear selection
           }
+          return t;
         });
         setGrid(updatedGrid);
-        setSelectedTiles([]);
+        // Reveal the tile on layer 2 if matched on layer 1
+        if (selectedTile.layer === 1) {
+          // Trigger re-render to show Layer 2 tile underneath
+
+          setGrid(prevGrid => {
+            return prevGrid.map((t, i) => {
+              if (i === selectedTileIndex) {
+                const tileBelowIndex = i + (grid.length / 2);
+                return { ...t, matched: true, selected: false }; //clear selection
+              }
+              return t;
+            });
+          });
+        }
+
+        setSelectedTileIndex(null);
       } else {
         // Incorrect match - reset selected tiles after a delay and add shake animation
-        const tile1Element = document.getElementById(`tile-${index1}`);
-        const tile2Element = document.getElementById(`tile-${index2}`);
-
-        if (tile1Element && tile2Element) {
-          tile1Element.classList.add('shake');
-          tile2Element.classList.add('shake');
-          tile1Element.style.border = '2px solid red';  // Add red border
-          tile2Element.style.border = '2px solid red';  // Add red border
-
-          setTimeout(() => {
-            setSelectedTiles([]);
-            tile1Element.classList.remove('shake');
-            tile2Element.classList.remove('shake');
-            tile1Element.style.border = '';  // Remove red border
-            tile2Element.style.border = '';  // Remove red border
-          }, 700);
-        } else {
-          setTimeout(() => {
-            setSelectedTiles([]);
-          }, 700);
-        }
+        resetSelection(index, selectedTileIndex, true);
       }
+    }
+  };
+
+  const resetSelection = (index1: number, index2: number | null, incorrectMatch: boolean) => {
+    //reset selection and apply shaking animation or remove highlight
+    const tile1Element = document.getElementById(`tile-${index1}`);
+    const tile2Element = index2 !== null ? document.getElementById(`tile-${index2}`) : null;
+
+    const reset = () => {
+      setSelectedTileIndex(null);
+      setGrid(prevGrid => {
+        return prevGrid.map((t, i) => ({ ...t, selected: false })); //clear selection
+      });
+      if (tile1Element) {
+        tile1Element.classList.remove('shake');
+        tile1Element.style.border = '';
+      }
+      if (tile2Element) {
+        tile2Element.classList.remove('shake');
+        tile2Element.style.border = '';
+      }
+    };
+
+    if (incorrectMatch) {
+      if (tile1Element) {
+        tile1Element.classList.add('shake');
+        tile1Element.style.border = '2px solid red';
+      }
+      if (tile2Element) {
+        tile2Element.classList.add('shake');
+        tile2Element.style.border = '2px solid red';
+      }
+      setTimeout(reset, 700);
+    } else {
+      setTimeout(reset, 200); //just remove highlight on same tile click
     }
   };
 
@@ -279,17 +319,41 @@ export default function Home() {
     generateGrid();
   };
 
+  const speak = useCallback((text: string) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ja-JP'; // Set the language to Japanese
+
+    // Attempt to set a Japanese voice
+    const voices = window.speechSynthesis.getVoices();
+    const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP');
+    if (japaneseVoice) {
+      utterance.voice = japaneseVoice;
+    } else {
+      // Fallback: Log a message if no Japanese voice is found.
+      console.warn("No Japanese voice found. Using default voice.");
+    }
+
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
   const HintTable = () => {
     const characters = mode === "hiragana" ? hiraganaCharacters : katakanaCharacters;
+
     return (
       <div className="flex flex-col">
         {Object.keys(characters).map((key) => (
-          <div key={key}>
-            <h3 className="font-bold capitalize">{key}</h3>
-            <div className="grid grid-cols-5 gap-2">
+          <div key={key} className="mb-4">
+            <h3 className="font-bold capitalize mb-2">{key}</h3>
+            <div className="flex flex-wrap gap-4">
               {characters[key as keyof typeof characters].map((char, index) => (
-                <div key={index} className="flex flex-col items-center justify-center">
-                  <span style={{ color: warmPalette[index % warmPalette.length] }}>{char.jp}</span>
+                <div key={index} className="flex items-center gap-2">
+                  <button
+                    className="text-2xl font-bold cursor-pointer"
+                    style={{ color: warmPalette[index % warmPalette.length] }}
+                    onClick={() => speak(char.jp)}
+                  >
+                    {char.jp}
+                  </button>
                   <span style={{ color: coolPalette[index % coolPalette.length] }}>{char.rm}</span>
                 </div>
               ))}
@@ -336,9 +400,22 @@ export default function Home() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" onClick={() => setShowHint(!showHint)}>
-                  Hint <HelpCircle className="ml-2 h-4 w-4" />
-                </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      Hint <HelpCircle className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[625px]">
+                    <DialogHeader>
+                      <DialogTitle>Alphabet Hints</DialogTitle>
+                      <DialogDescription>
+                        Click on Japanese characters to hear their pronunciation.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <HintTable />
+                  </DialogContent>
+                </Dialog>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Need a little help? This shows all available characters!</p>
@@ -346,14 +423,6 @@ export default function Home() {
             </Tooltip>
           </TooltipProvider>
         </div>
-
-        {showHint && (
-          <Card className="mb-4">
-            <CardContent>
-              <HintTable />
-            </CardContent>
-          </Card>
-        )}
 
         {gameWon && <h2 className="text-2xl font-bold mb-4">Congratulations! You won!</h2>}
 
@@ -367,22 +436,23 @@ export default function Home() {
             <button
               key={index}
               id={`tile-${tile.index}`}
-              className={`relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold
-                            bg-tile-background text-tile-text
-                            transition-all duration-300
-                            shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary
-                            cursor-pointer
-                            ${selectedTiles.includes(tile.index) ? 'cursor-default' : 'cursor-pointer'}
-                            ${tile.matched ? 'opacity-0 pointer-events-none' : ''} // Make matched tiles disappear
-                             ${selectedTiles.includes(tile.index) ? 'bg-muted' : ''}
-                             `}
+              className={cn(
+                "relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold",
+                "bg-tile-background text-tile-text transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary",
+                "cursor-pointer",
+                { "cursor-default": tile.selected },
+                { "opacity-0 pointer-events-none": tile.matched }, // Make matched tiles disappear
+                { "bg-muted": tile.selected },
+                tile.selected ? "border-2 border-blue-500" : "border border-tile-border", //Blue Border on selection
+                tile.matched ? 'opacity-0 pointer-events-none' : ''
+
+              )}
               style={{
                 color: tile.color,
-                border: `1px solid var(--tile-border)`,
                 visibility: tile.matched && tile.layer === 1 ? 'hidden' : 'visible'
               }}
               onClick={() => handleTileClick(tile.index)}
-              disabled={selectedTiles.includes(tile.index) || tile.matched}
+              disabled={tile.matched}
             >
               {tile.content}
             </button>
@@ -393,22 +463,21 @@ export default function Home() {
             <button
               key={index + totalTiles / 2}  // Ensure unique keys
               id={`tile-${tile.index}`}
-              className={`relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold
-                            bg-tile-background text-tile-text
-                            transition-all duration-300
-                            shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary
-                            cursor-pointer
-                            ${selectedTiles.includes(tile.index) ? 'cursor-default' : 'cursor-pointer'}
-                            ${tile.matched ? 'opacity-0 pointer-events-none' : ''} // Make matched tiles disappear
-                             ${selectedTiles.includes(tile.index) ? 'bg-muted' : ''}
-                            `}
+              className={cn(
+                "relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold",
+                "bg-tile-background text-tile-text transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary",
+                "cursor-pointer",
+                { "cursor-default": tile.selected },
+                { "opacity-0 pointer-events-none": tile.matched }, // Make matched tiles disappear
+                { "bg-muted": tile.selected },
+                tile.selected ? "border-2 border-blue-500" : "border border-tile-border" //Blue Border on selection
+              )}
               style={{
                 color: tile.color,
-                border: `1px solid var(--tile-border)`,
                 visibility: tile.matched ? 'hidden' : 'hidden' // Initially hidden
               }}
-            onClick={() => handleTileClick(tile.index)}
-            disabled={selectedTiles.includes(tile.index) || tile.matched}
+              onClick={() => handleTileClick(tile.index)}
+              disabled={tile.matched}
             >
               {tile.content}
             </button>
