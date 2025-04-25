@@ -245,13 +245,17 @@ export default function Home() {
             return prevGrid.map((t, i) => {
               if (i === selectedTileIndex) {
                 const tileBelowIndex = i + (grid.length / 2);
-                return { ...t, matched: true, selected: false };
+                const tileBelow = prevGrid[tileBelowIndex];
+                if (tileBelow) {
+                  return { ...t, matched: true, selected: false };
+                } else {
+                  return t;
+                }
               }
               return t;
             });
           });
         }
-
         resetSelection(index, selectedTileIndex, false); //clear selection
         setSelectedTileIndex(null);
       } else {
@@ -290,11 +294,11 @@ export default function Home() {
       });
       if (tile1Element) {
         tile1Element.classList.add('shake');
-        tile1Element.style.border = '2px solid red';
+        tile1Element.style.border = '2px solid hsl(var(--incorrect-border-color))';
       }
       if (tile2Element) {
         tile2Element.classList.add('shake');
-        tile2Element.style.border = '2px solid red';
+        tile2Element.style.border = '2px solid hsl(var(--incorrect-border-color))';
       }
       setTimeout(reset, 700);
     } else {
@@ -318,21 +322,38 @@ export default function Home() {
     generateGrid();
   };
 
-  const speak = useCallback((text: string) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ja-JP';
+  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [speechSpeed, setSpeechSpeed] = useState(0.5);
 
-    const voices = window.speechSynthesis.getVoices();
-    const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP' && !voice.name.includes('Microsoft'));
-
-    if (japaneseVoice) {
-      utterance.voice = japaneseVoice;
-    } else {
-      console.warn("No suitable Japanese voice found. Using default voice.");
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const voices = window.speechSynthesis.getVoices();
+      const preferredVoice = voices.find(voice => voice.name === "Microsoft Nanami Online (Natural) - Japanese (Japan)");
+      setSelectedVoice(preferredVoice || null);
     }
-
-    window.speechSynthesis.speak(utterance);
   }, []);
+
+  const speak = useCallback((text: string) => {
+    if (typeof window !== 'undefined') {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      } else {
+        const voices = window.speechSynthesis.getVoices();
+        const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP' && !voice.name.includes('Microsoft'));
+        if (japaneseVoice) {
+          utterance.voice = japaneseVoice;
+        } else {
+          console.warn("No suitable Japanese voice found. Using default voice.");
+        }
+      }
+
+      utterance.rate = speechSpeed;
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [selectedVoice, speechSpeed]);
 
   const HintTable = () => {
     const characters = mode === "hiragana" ? hiraganaCharacters : katakanaCharacters;
@@ -418,14 +439,47 @@ export default function Home() {
                       Hint <HelpCircle className="ml-2 h-4 w-4" />
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[625px]">
+                  <DialogContent className="sm:max-w-[625px]" style={{ backgroundColor: 'hsl(var(--hint-panel-background))', color: 'hsl(var(--hint-panel-foreground))', border: '1px solid hsl(var(--hint-panel-border))' }}>
                     <DialogHeader>
                       <DialogTitle>Alphabet Hints</DialogTitle>
                       <DialogDescription>
                         Click on Japanese characters to hear their pronunciation.
                       </DialogDescription>
                     </DialogHeader>
-                    <HintTable />
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="voiceSelect">Voice:</label>
+                        <select
+                          id="voiceSelect"
+                          className="bg-background border border-input rounded-md px-2 py-1"
+                          value={selectedVoice ? selectedVoice.name : ""}
+                          onChange={(e) => {
+                            const selectedVoiceName = e.target.value;
+                            const voice = window.speechSynthesis.getVoices().find(v => v.name === selectedVoiceName) || null;
+                            setSelectedVoice(voice);
+                          }}
+                        >
+                          {typeof window !== 'undefined' && window.speechSynthesis.getVoices()
+                            .filter(voice => voice.lang.startsWith('ja'))
+                            .map((voice) => (
+                              <option key={voice.name} value={voice.name}>
+                                {voice.name}
+                              </option>
+                            ))}
+                        </select>
+                        <label htmlFor="speedControl">Speed:</label>
+                        <input
+                          type="range"
+                          id="speedControl"
+                          min="0.1"
+                          max="1.5"
+                          step="0.1"
+                          value={speechSpeed}
+                          onChange={(e) => setSpeechSpeed(parseFloat(e.target.value))}
+                        />
+                      </div>
+                      <HintTable />
+                    </div>
                   </DialogContent>
                 </Dialog>
               </TooltipTrigger>
@@ -454,13 +508,15 @@ export default function Home() {
                 "cursor-pointer",
                 { "cursor-default": tile.selected },
                 { "opacity-0 pointer-events-none": tile.matched },
-                { "bg-muted text-tile-selected-text border-2 border-blue-500": tile.selected },
                 "border border-tile-border",
+                tile.selected ? 'border-2' : '',
+                tile.selected ? 'border-blue-500' : '',
                 tile.matched ? 'opacity-0 pointer-events-none' : ''
               )}
               style={{
                 color: tile.color,
-                visibility: tile.matched && tile.layer === 1 ? 'hidden' : 'visible'
+                visibility: tile.matched && tile.layer === 1 ? 'hidden' : 'visible',
+                borderColor: tile.selected ? 'hsl(var(--selected-border-color))' : ''
               }}
               onClick={() => handleTileClick(tile.index)}
               disabled={tile.matched}
@@ -479,12 +535,14 @@ export default function Home() {
                 "cursor-pointer",
                 { "cursor-default": tile.selected },
                 { "opacity-0 pointer-events-none": tile.matched },
-                { "bg-muted text-tile-selected-text border-2 border-blue-500": tile.selected },
-                "border border-tile-border"
+                "border border-tile-border",
+                tile.selected ? 'border-2' : '',
+                tile.selected ? 'border-blue-500' : ''
               )}
               style={{
                 color: tile.color,
-                visibility: tile.matched ? 'hidden' : 'hidden'
+                visibility: tile.matched ? 'hidden' : 'hidden',
+                borderColor: tile.selected ? 'hsl(var(--selected-border-color))' : ''
               }}
               onClick={() => handleTileClick(tile.index)}
               disabled={tile.matched}
@@ -526,4 +584,3 @@ export default function Home() {
     </div>
   );
 }
-

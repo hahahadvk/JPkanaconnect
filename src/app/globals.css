@@ -47,6 +47,8 @@ body {
     --tile-border: 214.3 31.8% 91.4%; /* Light mode tile border */
     --tile-selected-background: 220 5.9% 10%;
     --tile-selected-text: 0 0% 98%;
+    --selected-border-color: 220 70% 50%; /* Blue for selected tiles */
+    --incorrect-border-color: 0 84.2% 60.2%; /* Red for incorrect match */
 
     --warm-1: 9 96% 66%;
     --warm-2: 25 91% 73%;
@@ -59,6 +61,13 @@ body {
     --cool-3: 231 58% 73%;
     --cool-4: 261 44% 64%;
     --cool-5: 207 55% 59%;
+
+    /* Hint panel */
+    --hint-panel-background: 0 0% 98%;
+    --hint-panel-foreground: 222.2 84% 4.9%;
+    --hint-panel-border: 214.3 31.8% 91.4%;
+    --hint-row-bg-odd: 210 40% 96.1%;
+    --hint-row-bg-even: 0 0% 100%;
   }
 
   .dark {
@@ -100,6 +109,15 @@ body {
     --tile-border: 216 34% 17%; /* Dark mode tile border */
     --tile-selected-background: 224.3 76.3% 48%;
     --tile-selected-text: 0 0% 9%;
+    --selected-border-color: 220 70% 50%; /* Blue for selected tiles */
+    --incorrect-border-color: 0 62.8% 30.6%; /* Red for incorrect match */
+
+    /* Hint panel Dark mode */
+    --hint-panel-background: 222.2 84% 4.9%;
+    --hint-panel-foreground: 210 40% 98%;
+    --hint-panel-border: 216 34% 17%;
+    --hint-row-bg-odd: 217.2 32.6% 17.5%;
+    --hint-row-bg-even: 222.2 84% 4.9%;
   }
 }
 
@@ -111,5 +129,3 @@ body {
     @apply bg-background text-foreground;
   }
 }
-
-
