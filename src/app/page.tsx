@@ -92,13 +92,21 @@ const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool
 
 const initialGridSize = "15x10";
 
+type Tile = {
+  content: string;
+  color: string;
+  matched: boolean;
+  index: number;
+};
+
 export default function Home() {
   const [gridSize, setGridSize] = useState(initialGridSize);
   const [mode, setMode] = useState<"hiragana" | "katakana">("hiragana");
-  const [grid, setGrid] = useState<({ content: string; color: string; isFlipped: boolean; matched: boolean } | null)[]>([]);
+  const [grid, setGrid] = useState<Tile[]>([]);
   const [selectedTiles, setSelectedTiles] = useState<number[]>([]);
   const [showHint, setShowHint] = useState(false);
   const [characterSet, setCharacterSet] = useState<CharacterSet>([]);
+  const [gameWon, setGameWon] = useState(false);
 
   const numRows = parseInt(gridSize.split("x")[0]);
   const numCols = parseInt(gridSize.split("x")[1]);
@@ -118,8 +126,16 @@ export default function Home() {
 
   useEffect(() => {
     generateGrid();
-    setSelectedTiles([]); // Reset selected tiles when the grid is regenerated
   }, [gridSize, mode, characterSet]);
+
+  useEffect(() => {
+    // Check win condition whenever the grid changes
+    if (grid.length > 0 && grid.every(tile => tile.matched)) {
+      setGameWon(true);
+    } else {
+      setGameWon(false);
+    }
+  }, [grid]);
 
   const generateGrid = () => {
     if (!characterSet.length) return;
@@ -127,75 +143,74 @@ export default function Home() {
     const numUniquePairs = Math.min(Math.floor(totalTiles / 2), characterSet.length);
     const selectedPairs = characterSet.slice(0, numUniquePairs);
 
-    let tiles: { content: string; color: string; isFlipped: boolean; matched: boolean }[] = [];
+    let tiles: { content: string; color: string; }[] = [];
 
     // Add unique pairs
     selectedPairs.forEach((pair, index) => {
-      tiles.push({ content: pair.jp, color: warmPalette[index % warmPalette.length], isFlipped: false, matched: false });
-      tiles.push({ content: pair.rm, color: coolPalette[index % coolPalette.length], isFlipped: false, matched: false });
+      tiles.push({ content: pair.jp, color: warmPalette[index % warmPalette.length] });
+      tiles.push({ content: pair.rm, color: coolPalette[index % coolPalette.length] });
     });
 
     // Fill the rest of the grid with random pairs if needed
     while (tiles.length < totalTiles) {
       const randomIndex = Math.floor(Math.random() * selectedPairs.length);
       const randomPair = selectedPairs[randomIndex];
-      tiles.push({ content: randomPair.jp, color: warmPalette[tiles.length % warmPalette.length], isFlipped: false, matched: false });
-      tiles.push({ content: randomPair.rm, color: coolPalette[tiles.length % coolPalette.length], isFlipped: false, matched: false });
+      tiles.push({ content: randomPair.jp, color: warmPalette[tiles.length % warmPalette.length] });
+      tiles.push({ content: randomPair.rm, color: coolPalette[tiles.length % coolPalette.length] });
     }
 
     // Shuffle the tiles
-    tiles = tiles.sort(() => Math.random() - 0.5);
+    const shuffledTiles = tiles.sort(() => Math.random() - 0.5);
 
-    setGrid(tiles.slice(0, totalTiles).map(tile => ({ ...tile, isFlipped: false, matched: false })));
+    // Create grid with index and matched status
+    const initialGrid = shuffledTiles.slice(0, totalTiles).map((tile, index) => ({
+      ...tile,
+      matched: false,
+      index: index
+    }));
+
+    setGrid(initialGrid);
+    setSelectedTiles([]);
   };
 
   const handleTileClick = (index: number) => {
-    if (selectedTiles.length === 2 || grid[index]?.matched) {
+    if (selectedTiles.length === 2 || grid[index].matched) {
       return;
     }
 
     let newSelectedTiles = [...selectedTiles, index];
-    let newGrid = [...grid];
-    newGrid[index] = { ...newGrid[index]!, isFlipped: true };
-    setGrid(newGrid);
     setSelectedTiles(newSelectedTiles);
 
     if (newSelectedTiles.length === 2) {
-      // Check for match after a delay
-      setTimeout(() => {
-        const [index1, index2] = newSelectedTiles;
-        const tile1 = grid[index1];
-        const tile2 = grid[index2];
+      const [index1, index2] = newSelectedTiles;
+      const tile1 = grid[index1];
+      const tile2 = grid[index2];
 
-        if (tile1 && tile2 && (characterSet.find(char => char.jp === tile1.content && char.rm === tile2.content) ||
-                              characterSet.find(char => char.rm === tile1.content && char.jp === tile2.content)))
-         {
-          // Handle correct match
-          newGrid = [...grid];
-          newGrid[index1] = { ...newGrid[index1]!, matched: true };
-          newGrid[index2] = { ...newGrid[index2]!, matched: true };
-          setGrid(newGrid);
+      if (characterSet.find(char => char.jp === tile1.content && char.rm === tile2.content) ||
+        characterSet.find(char => char.rm === tile1.content && char.jp === tile2.content)) {
+        // Correct match
+        const updatedGrid = grid.map((tile, i) =>
+          i === index1 || i === index2 ? { ...tile, matched: true } : tile
+        );
+        setGrid(updatedGrid);
+        setSelectedTiles([]);
+      } else {
+        // Incorrect match - reset selected tiles after a delay
+        setTimeout(() => {
           setSelectedTiles([]);
-        } else {
-          // Handle incorrect match
-          newGrid = [...grid];
-          newGrid[index1] = { ...newGrid[index1]!, isFlipped: false };
-          newGrid[index2] = { ...newGrid[index2]!, isFlipped: false };
-          setGrid(newGrid);
-          setSelectedTiles([]);
-        }
-
-      }, 700);
+        }, 700);
+      }
     }
   };
 
   const handleModeToggle = () => {
     setMode(prevMode => (prevMode === "hiragana" ? "katakana" : "hiragana"));
-    setGrid([]); // Clear the grid
-    setSelectedTiles([]); // Reset selected tiles
+    generateGrid();
   };
 
-  const isGameWon = grid.every(tile => !tile || tile.matched);
+  const handleNewGame = () => {
+    generateGrid();
+  };
 
   const HintTable = () => {
     const characters = mode === "hiragana" ? hiraganaCharacters : katakanaCharacters;
@@ -239,7 +254,7 @@ export default function Home() {
             </SelectContent>
           </Select>
 
-          <Button onClick={generateGrid}>New Game</Button>
+          <Button onClick={handleNewGame}>New Game</Button>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -262,7 +277,7 @@ export default function Home() {
           </Card>
         )}
 
-        {isGameWon && <h2 className="text-2xl font-bold mb-4">Congratulations! You won!</h2>}
+        {gameWon && <h2 className="text-2xl font-bold mb-4">Congratulations! You won!</h2>}
 
         <div className="grid" style={{
           gridTemplateColumns: `repeat(${numCols}, minmax(50px, 1fr))`,
@@ -271,22 +286,21 @@ export default function Home() {
           maxWidth: `${numCols * 60}px`,
         }}>
           {grid.map((tile, index) => (
-            tile ? (
-              <button
-                key={index}
-                className={`relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold
-                            ${tile.isFlipped || tile.matched ? 'bg-muted' : 'bg-secondary'}
+            <button
+              key={index}
+              className={`relative w-full h-16 rounded-md flex items-center justify-center text-2xl font-bold
+                            ${selectedTiles.includes(index) ? 'bg-muted' : 'bg-secondary'}
                             ${tile.matched ? 'opacity-50' : ''}
                             transition-all duration-300
                             shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary
+                            ${selectedTiles.includes(index) ? 'cursor-default' : 'cursor-pointer'}
                             `}
-                style={{ color: tile.color, visibility: tile.matched ? 'hidden' : 'visible' }}
-                onClick={() => handleTileClick(index)}
-                disabled={tile.matched}
-              >
-                {tile.isFlipped || tile.matched ? tile.content : ''}
-              </button>
-            ) : null
+              style={{ color: tile.color, visibility: tile.matched ? 'hidden' : 'visible' }}
+              onClick={() => handleTileClick(index)}
+              disabled={selectedTiles.includes(index) || tile.matched}
+            >
+              {tile.content}
+            </button>
           ))}
         </div>
 
