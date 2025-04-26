@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModeToggle } from "@/components/mode-toggle";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Settings } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -15,6 +15,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
 
 const hiraganaCharacters = {
   basic: [
@@ -53,7 +54,7 @@ const hiraganaCharacters = {
 };
 
 const katakanaCharacters = {
- basic: [
+  basic: [
     { jp: "ア", rm: "a" }, { jp: "イ", rm: "i" }, { jp: "ウ", rm: "u" }, { jp: "エ", rm: "e" }, { jp: "オ", rm: "o" },
     { jp: "カ", rm: "ka" }, { jp: "キ", rm: "ki" }, { jp: "ク", rm: "ku" }, { jp: "ケ", rm: "ke" }, { jp: "コ", rm: "ko" },
     { jp: "サ", rm: "sa" }, { jp: "シ", rm: "shi" }, { jp: "ス", rm: "su" }, { jp: "セ", rm: "se" }, { jp: "ソ", rm: "so" },
@@ -94,13 +95,13 @@ const warmPalette = ["hsl(var(--warm-1))", "hsl(var(--warm-2))", "hsl(var(--warm
 const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool-3))", "hsl(var(--cool-4))", "hsl(var(--cool-5))"];
 
 const initialGridSize = "15x10";
-const initialGridStructure = "15x10 Double Layer";
+const initialGameSize = "300 Tiles Total";
 
 type Tile = {
   content: string;
   color: string;
   matched: boolean;
-  layer: number;
+  round: number; // 1 or 2
   index: number;
   selected: boolean;
 };
@@ -108,7 +109,7 @@ type Tile = {
 export default function Home() {
   // Game State
   const [gridSize, setGridSize] = useState(initialGridSize);
-  const [gridStructure, setGridStructure] = useState(initialGridStructure);
+  const [gameSize, setGameSize] = useState(initialGameSize);
   const [mode, setMode] = useState<"hiragana" | "katakana">("hiragana");
   const [grid, setGrid] = useState<Tile[]>([]);
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
@@ -116,15 +117,17 @@ export default function Home() {
   const [gameWon, setGameWon] = useState(false);
   const { theme, setTheme: setAppTheme } = useTheme();
   const [isHintOpen, setIsHintOpen] = useState(false);
+  const [currentRound, setCurrentRound] = useState(1); // 1 or 2
+  const totalRounds = 2;
 
-  // Settings State
+  // TTS Settings
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [speechSpeed, setSpeechSpeed] = useState(0.5);
+  const [speechSpeed, setSpeechSpeed] = useState(0.4); // Default TTS speed
+  const [showTTSSettings, setShowTTSSettings] = useState(false);
 
   const numRows = parseInt(gridSize.split("x")[0]);
   const numCols = parseInt(gridSize.split("x")[1]);
-  const isDoubleLayer = gridStructure.includes("Double Layer");
-  const totalTiles = numRows * numCols * (isDoubleLayer ? 2 : 1);
+  const totalTiles = parseInt(gameSize.split(" ")[0]); // 200 or 300 tiles
 
   // --- Load settings from local storage on initial render ---
   useEffect(() => {
@@ -162,69 +165,78 @@ export default function Home() {
 
   useEffect(() => {
     generateGrid();
-  }, [gridSize, gridStructure, mode, characterSet, theme]);
+  }, [gridSize, gameSize, mode, characterSet, theme, currentRound]);
 
   useEffect(() => {
     if (grid.length > 0 && grid.every(tile => tile.matched)) {
-      setGameWon(true);
+      if (currentRound < totalRounds) {
+        // Move to the next round
+        setCurrentRound(currentRound + 1);
+        setSelectedTileIndex(null);
+      } else {
+        // All rounds complete
+        setGameWon(true);
+      }
     } else {
       setGameWon(false);
     }
-  }, [grid]);
+  }, [grid, currentRound, totalRounds]);
 
   const generateGrid = () => {
     if (!characterSet.length) return;
 
-    const numUniquePairs = Math.min(Math.floor(totalTiles / 2), characterSet.length);
-    const selectedPairs = characterSet.slice(0, numUniquePairs);
+    const tilesPerRound = parseInt(gameSize.split(" ")[0]) / totalRounds;
 
-    let layer1Tiles: { content: string; color: string; }[] = [];
-    let layer2Tiles: { content: string; color: string; }[] = [];
+    // Get all the characters and split into round 1 and round 2.
+    const numUniquePairs = Math.min(Math.floor(tilesPerRound / 2), characterSet.length);
+    const round1Pairs = characterSet.slice(0, numUniquePairs);
+    const round2Pairs = characterSet.slice(numUniquePairs, 2 * numUniquePairs);
 
-    for (let i = 0; i < selectedPairs.length; i++) {
-      const pair = selectedPairs[i];
-      const warmColor = warmPalette[i % warmPalette.length];
-      const coolColor = coolPalette[i % coolPalette.length];
+    let round1Tiles: { content: string; color: string; }[] = [];
+    let round2Tiles: { content: string; color: string; }[] = [];
 
-      if (i < selectedPairs.length / 2) {
-        layer1Tiles.push({ content: pair.jp, color: warmColor });
-        layer1Tiles.push({ content: pair.rm, color: coolColor });
-      } else {
-        layer2Tiles.push({ content: pair.jp, color: warmColor });
-        layer2Tiles.push({ content: pair.rm, color: coolColor });
-      }
+    const populateTiles = (round: number, targetTiles: { content: string; color: string; }[], pairs: { jp: string, rm: string }[], totalTilesForRound: number) => {
+        let currentTileCount = 0;
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
+            const warmColor = warmPalette[i % warmPalette.length];
+            const coolColor = coolPalette[i % coolPalette.length];
+
+            targetTiles.push({ content: pair.jp, color: warmColor });
+            targetTiles.push({ content: pair.rm, color: coolColor });
+            currentTileCount += 2;
+        }
+
+        // Fill the rest of the round's tile with characters.
+        while (currentTileCount < totalTilesForRound) {
+            const randomIndex = Math.floor(Math.random() * pairs.length);
+            const randomPair = pairs[randomIndex];
+            targetTiles.push({ content: randomPair.jp, color: warmPalette[targetTiles.length % warmPalette.length] });
+            targetTiles.push({ content: randomPair.rm, color: coolPalette[targetTiles.length % coolPalette.length] });
+            currentTileCount += 2;
+        }
     }
 
-    while (layer1Tiles.length < totalTiles / 2) {
-      const randomIndex = Math.floor(Math.random() * selectedPairs.length);
-      const randomPair = selectedPairs[randomIndex];
-      layer1Tiles.push({ content: randomPair.jp, color: warmPalette[layer1Tiles.length % warmPalette.length] });
-      layer1Tiles.push({ content: randomPair.rm, color: coolPalette[layer1Tiles.length % coolPalette.length] });
-    }
+    populateTiles(1, round1Tiles, round1Pairs, tilesPerRound);
+    populateTiles(2, round2Tiles, round2Pairs, tilesPerRound);
 
-    while (layer2Tiles.length < totalTiles / 2) {
-      const randomIndex = Math.floor(Math.random() * selectedPairs.length);
-      const randomPair = selectedPairs[randomIndex];
-      layer2Tiles.push({ content: randomPair.jp, color: warmPalette[layer2Tiles.length % warmPalette.length] });
-      layer2Tiles.push({ content: randomPair.rm, color: coolPalette[layer2Tiles.length % coolPalette.length] });
-    }
-
-    const shuffledLayer1Tiles = layer1Tiles.sort(() => Math.random() - 0.5);
-    const shuffledLayer2Tiles = layer2Tiles.sort(() => Math.random() - 0.5);
+    const shuffledRound1Tiles = round1Tiles.sort(() => Math.random() - 0.5);
+    const shuffledRound2Tiles = round2Tiles.sort(() => Math.random() - 0.5);
 
     const initialGrid = [
-      ...shuffledLayer1Tiles.slice(0, totalTiles / 2).map((tile, index) => ({
+      ...shuffledRound1Tiles.slice(0, tilesPerRound).map((tile, index) => ({
         ...tile,
         matched: false,
-        layer: 1,
+        round: 1,
         index: index,
         selected: false
       })),
-      ...shuffledLayer2Tiles.slice(0, totalTiles / 2).map((tile, index) => ({
+      ...shuffledRound2Tiles.slice(0, tilesPerRound).map((tile, index) => ({
+        ...tile,
         ...tile,
         matched: false,
-        layer: 2,
-        index: index + totalTiles / 2,
+        round: 2,
+        index: index + tilesPerRound,
         selected: false
       }))
     ];
@@ -236,7 +248,7 @@ export default function Home() {
   const handleTileClick = (index: number) => {
     const tile = grid[index];
 
-    if (!tile || tile.matched) {
+    if (!tile || tile.matched || tile.round !== currentRound) {
       return;
     }
 
@@ -256,11 +268,6 @@ export default function Home() {
       // Second tile selection
       const selectedTile = grid[selectedTileIndex];
 
-      if (selectedTile.layer !== tile.layer) {
-        resetSelection(index, selectedTileIndex, true); // Incorrect due to layer mismatch
-        return;
-      }
-
       if (characterSet.find(char => char.jp === selectedTile.content && char.rm === tile.content) ||
         characterSet.find(char => char.rm === selectedTile.content && char.jp === tile.content)) {
         // Correct match
@@ -272,15 +279,6 @@ export default function Home() {
         });
         setGrid(updatedGrid);
 
-        // Reveal the tile below if it was in layer 1
-        if (selectedTile.layer === 1) {
-          const tileBelowIndex = index; // Ensure we correctly reveal at same index, not selectedTileIndex
-          setGrid(prevGrid => {
-            const newGrid = [...prevGrid];
-            newGrid[tileBelowIndex] = { ...newGrid[tileBelowIndex], matched: true, selected: false };
-            return newGrid;
-          });
-        }
         resetSelection(index, selectedTileIndex, false); // Correct match, clear selection
         setSelectedTileIndex(null);
       } else {
@@ -302,21 +300,23 @@ export default function Home() {
       if (tile1Element) {
         tile1Element.classList.remove('shake');
         tile1Element.style.border = '';
+        tile1Element.style.borderWidth = '';
       }
       if (tile2Element) {
         tile2Element.classList.remove('shake');
         tile2Element.style.border = '';
+        tile2Element.style.borderWidth = '';
       }
     };
 
     if (incorrectMatch) {
       if (tile1Element) {
         tile1Element.classList.add('shake');
-        tile1Element.style.border = '2px solid hsl(var(--incorrect-border-color))';
+        tile1Element.style.border = `2px solid hsl(var(--incorrect-border-color))`;
       }
       if (tile2Element) {
         tile2Element.classList.add('shake');
-        tile2Element.style.border = '2px solid hsl(var(--incorrect-border-color))';
+        tile2Element.style.border = `2px solid hsl(var(--incorrect-border-color))`;
       }
       setTimeout(reset, 700);
     } else {
@@ -333,10 +333,12 @@ export default function Home() {
 
   const handleModeToggle = () => {
     setMode(prevMode => (prevMode === "hiragana" ? "katakana" : "hiragana"));
+    setCurrentRound(1);
     generateGrid();
   };
 
   const handleNewGame = () => {
+    setCurrentRound(1);
     generateGrid();
   };
 
@@ -354,86 +356,94 @@ export default function Home() {
     localStorage.setItem("speechSpeed", newSpeed.toString()); //Persist
   };
 
-  type ThemeType = "light" | "dark" | "system";
-  const handleThemeToggle = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setAppTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-  };
+    type ThemeType = "light" | "dark" | "system";
+    const handleThemeToggle = () => {
+        const newTheme = theme === "light" ? "dark" : "light";
+        setAppTheme(newTheme);
+        localStorage.setItem("theme", newTheme);
+    };
 
   const speak = useCallback((text: string) => {
     if (typeof window !== 'undefined') {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ja-JP';
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ja-JP';
 
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      } else {
-        const voices = window.speechSynthesis.getVoices();
-        const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP' && !voice.name.includes('Microsoft'));
-        if (japaneseVoice) {
-          utterance.voice = japaneseVoice;
-        } else {
-          console.warn("No suitable Japanese voice found. Using default voice.");
+        // Voice Selection Logic:
+        let voiceToUse = selectedVoice; // Default to selected voice if available
+
+        if (!voiceToUse) {
+            const voices = window.speechSynthesis.getVoices();
+            // Attempt to find a clear, natural-sounding Japanese voice
+            voiceToUse = voices.find(voice =>
+                voice.lang === 'ja-JP' &&
+                !voice.name.includes('Microsoft') && // Exclude Microsoft voices if possible
+                !voice.name.toLowerCase().includes('male') && // Exclude male voices heuristically
+                !voice.name.toLowerCase().includes('deep') && // Exclude deep voices heuristically
+                voice.name.toLowerCase().includes('natural') // Attempt to prefer voices marked as natural
+            ) || voices.find(voice => voice.lang === 'ja-JP'); // Fallback to any Japanese voice
         }
-      }
 
-      utterance.rate = speechSpeed;
-      window.speechSynthesis.speak(utterance);
+        if (voiceToUse) {
+            utterance.voice = voiceToUse;
+        } else {
+            console.warn("No suitable Japanese voice found. Using default voice.");
+        }
+        utterance.rate = speechSpeed;
+        window.speechSynthesis.speak(utterance);
     }
   }, [selectedVoice, speechSpeed]);
 
-  const HintTable = () => {
-    const characters = mode === "hiragana" ? hiraganaCharacters : katakanaCharacters;
+    const HintTable = () => {
+        const characters = mode === "hiragana" ? hiraganaCharacters : katakanaCharacters;
 
-    return (
-      <Tabs defaultValue="basic" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="basic">Basic (基本)</TabsTrigger>
-          <TabsTrigger value="diacritic">Diacritics (濁音/半濁音)</TabsTrigger>
-          <TabsTrigger value="contracted">Contracted (拗音)</TabsTrigger>
-        </TabsList>
-        <TabsContent value="basic">
-          <HintContent characters={sortCharacters(characters.basic)} speak={speak} palette={warmPalette} />
-        </TabsContent>
-        <TabsContent value="diacritic">
-          <HintContent characters={sortCharacters(characters.diacritic)} speak={speak} palette={warmPalette} />
-        </TabsContent>
-        <TabsContent value="contracted">
-          <HintContent characters={sortCharacters(characters.contracted)} speak={speak} palette={warmPalette} />
-        </TabsContent>
-      </Tabs>
+        return (
+            <Tabs defaultValue="basic" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="basic">Basic (基本)</TabsTrigger>
+                    <TabsTrigger value="diacritic">Diacritics (濁音/半濁音)</TabsTrigger>
+                    <TabsTrigger value="contracted">Contracted (拗音)</TabsTrigger>
+                </TabsList>
+                <TabsContent value="basic">
+                    <HintContent characters={sortCharacters(characters.basic)} speak={speak} palette={warmPalette} />
+                </TabsContent>
+                <TabsContent value="diacritic">
+                    <HintContent characters={sortCharacters(characters.diacritic)} speak={speak} palette={warmPalette} />
+                </TabsContent>
+                <TabsContent value="contracted">
+                    <HintContent characters={sortCharacters(characters.contracted)} speak={speak} palette={warmPalette} />
+                </TabsContent>
+            </Tabs>
+        );
+    };
+
+    // Function to sort characters in a i u e o order
+    const sortCharacters = (characters: { jp: string; rm: string; }[]) => {
+        const order = ['a', 'i', 'u', 'e', 'o'];
+        return [...characters].sort((a, b) => {
+            const indexA = order.indexOf(a.rm.charAt(0));
+            const indexB = order.indexOf(b.rm.charAt(0));
+            return indexA - indexB;
+        });
+    };
+
+    const HintContent = ({ characters, speak, palette }: { characters: { jp: string; rm: string; }[]; speak: (text: string) => void; palette: string[] }) => (
+        <div className="border p-4 rounded-md max-h-[400px] overflow-y-auto">
+            <div className="grid gap-4" style={{ gridTemplateColumns: mode === "hiragana" ? "repeat(5, minmax(50px, 1fr))" : "repeat(5, minmax(50px, 1fr))"}}>
+                {characters.map((char, index) => (
+                    <div key={index} className="flex flex-col items-center gap-2">
+                        <button
+                            className="text-2xl font-bold cursor-pointer"
+                            style={{ color: palette[index % palette.length] }}
+                            onClick={() => speak(char.jp)}
+                        >
+                            {char.jp}
+                        </button>
+                        <span style={{ color: "hsl(var(--cool-3))" }}>{char.rm}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
     );
-  };
-
-  // Function to sort characters in a i u e o order
-  const sortCharacters = (characters: { jp: string; rm: string; }[]) => {
-    const order = ['a', 'i', 'u', 'e', 'o'];
-    return [...characters].sort((a, b) => {
-      const indexA = order.indexOf(a.rm.charAt(0));
-      const indexB = order.indexOf(b.rm.charAt(0));
-      return indexA - indexB;
-    });
-  };
-
-  const HintContent = ({ characters, speak, palette }: { characters: { jp: string; rm: string; }[]; speak: (text: string) => void; palette: string[] }) => (
-    <div className="border p-4 rounded-md max-h-[400px] overflow-y-auto">
-      <div className="grid grid-cols-5 gap-4">
-        {characters.map((char, index) => (
-          <div key={index} className="flex flex-col items-center gap-2">
-            <button
-              className="text-2xl font-bold cursor-pointer"
-              style={{ color: palette[index % palette.length] }}
-              onClick={() => speak(char.jp)}
-            >
-              {char.jp}
-            </button>
-            <span style={{ color: "hsl(var(--cool-3))" }}>{char.rm}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 
   return (
     <div className={`flex flex-col items-center justify-center min-h-screen py-2 ${theme === 'dark' ? 'dark' : ''}`}>
@@ -447,23 +457,13 @@ export default function Home() {
       <main className="flex flex-col items-center justify-center w-full flex-1 px-4 text-center">
         <div className="flex flex-col md:flex-row gap-4 mb-4">
 
-          <Select value={gridStructure} onValueChange={setGridStructure}>
+          <Select value={gameSize} onValueChange={setGameSize}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Select grid structure" />
+              <SelectValue placeholder="Select Game Size" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="15x10 Double Layer">15x10 Double Layer</SelectItem>
-              <SelectItem value="10x10 Double Layer">10x10 Double Layer</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={gridSize} onValueChange={setGridSize}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Select grid size" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="15x10">15x10</SelectItem>
-              <SelectItem value="10x10">10x10</SelectItem>
+              <SelectItem value="300 Tiles Total">300 Tiles Total</SelectItem>
+              <SelectItem value="200 Tiles Total">200 Tiles Total</SelectItem>
             </SelectContent>
           </Select>
 
@@ -527,7 +527,7 @@ export default function Home() {
           </TooltipProvider>
         </div>
 
-        {gameWon && <h2 className="text-2xl font-bold mb-4">Congratulations! You won!</h2>}
+        {gameWon ? <h2 className="text-2xl font-bold mb-4">Congratulations! You won!</h2> : <h2 className="text-2xl font-bold mb-4">Round {currentRound}/{totalRounds}</h2>}
 
         <div className="grid" style={{
           gridTemplateColumns: `repeat(${numCols}, minmax(50px, 1fr))`,
@@ -535,7 +535,7 @@ export default function Home() {
           width: "100%",
           maxWidth: `${numCols * 60}px`,
         }}>
-          {grid.map((tile, index) => (
+          {grid.filter(tile => tile.round === currentRound).map((tile, index) => (
             <button
               key={index}
               id={`tile-${tile.index}`}
@@ -552,8 +552,8 @@ export default function Home() {
               )}
               style={{
                 color: tile.color,
-                visibility: (tile.layer === 2 && !grid[index - (grid.length / 2)]?.matched) || tile.layer === 1 ? 'visible' : 'hidden',
-                borderColor: tile.selected ? 'hsl(var(--selected-border-color))' : ''
+                borderColor: tile.selected ? 'hsl(var(--selected-border-color))' : '',
+                borderWidth: tile.selected ? '3px' : '1px'
               }}
               onClick={() => handleTileClick(tile.index)}
               disabled={tile.matched}
