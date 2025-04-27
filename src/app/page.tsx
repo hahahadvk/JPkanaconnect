@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Tile {
   index: number;
@@ -128,8 +129,9 @@ export default function Home() {
   const [isHintOpen, setIsHintOpen] = useState(false);
   const [speechSpeed, setSpeechSpeed] = useState(0.5);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-    const warmPalette = ["hsl(var(--warm-1))", "hsl(var(--warm-2))", "hsl(var(--warm-3))", "hsl(var(--warm-4))", "hsl(var(--warm-5))"];
-    const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool-3))", "hsl(var(--cool-4))", "hsl(var(--cool-5))"];
+  const warmPalette = ["hsl(var(--warm-1))", "hsl(var(--warm-2))", "hsl(var(--warm-3))", "hsl(var(--warm-4))", "hsl(var(--warm-5))"];
+  const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool-3))", "hsl(var(--cool-4))", "hsl(var(--cool-5))"];
+    const [showTTSControls, setShowTTSControls] = useState(false);
 
   const handleVoiceChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     if (typeof window !== 'undefined') {
@@ -139,34 +141,34 @@ export default function Home() {
     }
   };
 
-    useEffect(() => {
-        const storedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-        setTheme(storedTheme || "light");
-        if (storedTheme) {
-            document.documentElement.classList.toggle("dark", storedTheme === "dark");
-        }
-    }, []);
+  useEffect(() => {
+      const storedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+      setTheme(storedTheme || "light");
+      if (storedTheme) {
+          document.documentElement.classList.toggle("dark", storedTheme === "dark");
+      }
+  }, []);
 
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            document.documentElement.classList.toggle("dark", theme === "dark");
-            localStorage.setItem("theme", theme);
-        }
-    }, [theme]);
+  useEffect(() => {
+      if (typeof window !== 'undefined') {
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          localStorage.setItem("theme", theme);
+      }
+  }, [theme]);
 
   useEffect(() => {
     startNewGame();
   }, [mode, gameSize]);
 
   useEffect(() => {
-    if (grid.length > 0 && grid.filter(tile => !tile.matched && tile.round === currentRound).length === 0) {
-      if (currentRound < totalRounds) {
-          // Auto-advance to next round (optional)
-          // setTimeout(() => { setCurrentRound(prev => prev + 1); }, 1000);
-      } else {
-        setGameWon(true);
+      if (grid.length > 0 && grid.filter(tile => !tile.matched && tile.round === currentRound).length === 0) {
+          if (currentRound < totalRounds) {
+              // Auto-advance to next round (optional)
+              //setTimeout(() => {setCurrentRound(prev => prev + 1); }, 1000);
+          } else {
+              setGameWon(true);
+          }
       }
-    }
   }, [grid, currentRound, totalRounds]);
 
   const generateCharacterPairs = useCallback((count: number, characterSet: Character[]) => {
@@ -180,46 +182,35 @@ export default function Home() {
 
   const initializeGrid = useCallback(() => {
     const numTiles = gameSize === "192 Tiles Total" ? 192 : 180;
-    const tilesPerRound = gameSize === "192 Tiles Total" ? 64 : 36;
+    const tilesPerRound = gameSize === "192 Tiles Total" ? 192/3 : 180/5;
     const numRounds = gameSize === "192 Tiles Total" ? 3 : 5;
 
-      const characterSet = mode === "hiragana" ? [...basicHiragana, ...diacriticHiragana, ...contractedHiragana] : [...basicKatakana, ...diacriticKatakana, ...contractedKatakana];
-      let tempGrid: Tile[] = [];
-      let tileIndex = 0;
+    const characterSet = mode === "hiragana" ? [...basicHiragana, ...diacriticHiragana, ...contractedHiragana] : [...basicKatakana, ...diacriticKatakana, ...contractedKatakana];
+    let tempGrid: Tile[] = [];
+    let tileIndex = 0;
 
-      // Calculate pairs needed from each character set for even distribution
-      const totalChars = characterSet.length;
-      const charsPerRound = Math.floor(totalChars / numRounds);
-      let remainingChars = totalChars % numRounds; // Handle remainder
+    const characterSetPairs = [];
 
-      for (let round = 1; round <= numRounds; round++) {
-          let pairsForRound = [];
+    // Ensure all characters are used
+    for (let i = 0; i < characterSet.length; i++) {
+        characterSetPairs.push(characterSet[i]);
+    }
 
-          // Take base number of chars for this round
-          for (let i = 0; i < charsPerRound; i++) {
-              pairsForRound.push(characterSet[i]);
-          }
+    // Add filler pairs to reach tilesPerRound / 2
+    while (characterSetPairs.length < tilesPerRound / 2) {
+      const char = characterSet[characterSetPairs.length % characterSet.length];
+      characterSetPairs.push(char);
+    }
 
-          // Distribute remainder chars across first few rounds
-          if (remainingChars > 0) {
-              pairsForRound.push(characterSet[charsPerRound]);
-              remainingChars--;
-          }
-
-          // Ensure total pairs do not exceed tilesPerRound / 2
-          while (pairsForRound.length < tilesPerRound / 2) {
-              const char = characterSet[pairsForRound.length % characterSet.length];
-              pairsForRound.push(char);
-          }
-
-          let tiles: Tile[] = [];
-          pairsForRound.forEach((pair, pairIndex) => {
-              const color = mode === "hiragana" ? warmPalette[pairIndex % warmPalette.length] : coolPalette[pairIndex % coolPalette.length];
-              tiles.push({ index: tileIndex++, content: pair.jp, color: color, selected: false, matched: false, round: round });
-              tiles.push({ index: tileIndex++, content: pair.rm, color: "hsl(var(--cool-3))", selected: false, matched: false, round: round });
-          });
-          tempGrid = [...tempGrid, ...shuffleArray(tiles)];
-      }
+    for (let round = 1; round <= numRounds; round++) {
+        let tiles: Tile[] = [];
+        for (let i = 0; i < tilesPerRound / 2; i++) {
+            const color = mode === "hiragana" ? warmPalette[i % warmPalette.length] : coolPalette[i % coolPalette.length];
+            tiles.push({ index: tileIndex++, content: characterSetPairs[i].jp, color: color, selected: false, matched: false, round: round });
+            tiles.push({ index: tileIndex++, content: characterSetPairs[i].rm, color: "hsl(var(--cool-3))", selected: false, matched: false, round: round });
+        }
+        tempGrid = [...tempGrid, ...shuffleArray(tiles)];
+    }
     setGrid(tempGrid);
     setGameWon(false);
   }, [gameSize, mode, generateCharacterPairs, warmPalette, coolPalette]);
@@ -341,7 +332,7 @@ export default function Home() {
     );
 
   const HintTable = () => {
-    const [speechSpeed, setSpeechSpeed] = useState(0.5);
+    const [speechSpeed, setSpeechSpeed] = useState(0.4);
 
     const speak = (text: string) => {
       if (typeof window !== 'undefined') {
@@ -376,16 +367,18 @@ export default function Home() {
         ) : (
           <HintContent characters={basicKatakana} speak={speak} palette={katakanaPalette} />
         )}
-        <label htmlFor="speedControl">Speed:</label>
-        <input
-          type="range"
-          id="speedControl"
-          min="0.1"
-          max="1.5"
-          step="0.1"
-          value={speechSpeed}
-          onChange={handleSpeedChange}
-        />
+        <div className="flex items-center justify-between">
+          <label htmlFor="speedControl">Speed:</label>
+          <input
+            type="range"
+            id="speedControl"
+            min="0.1"
+            max="1.5"
+            step="0.1"
+            value={speechSpeed}
+            onChange={handleSpeedChange}
+          />
+        </div>
       </div>
     );
   };
@@ -400,6 +393,10 @@ export default function Home() {
       setGameWon(true);
     }
   };
+
+    const toggleTTSControls = () => {
+        setShowTTSControls(!showTTSControls);
+    };
 
   return (
     <div className={`flex flex-col items-center justify-center min-h-screen py-2 ${theme === 'dark' ? 'dark' : ''}`}>
@@ -445,41 +442,35 @@ export default function Home() {
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  {typeof window !== 'undefined' && (
-                    <>
-                      <label htmlFor="voiceSelect">Voice:</label>
-                      <select
-                        id="voiceSelect"
-                        className="bg-background border border-input rounded-md px-2 py-1"
-                        value={selectedVoice ? selectedVoice.name : ""}
-                        onChange={handleVoiceChange}
-                      >
-                        {window.speechSynthesis.getVoices()
-                          .filter(voice => voice.lang.startsWith('ja'))
-                          .map((voice) => (
-                            <option key={voice.name} value={voice.name}>
-                              {voice.name}
-                            </option>
-                          ))}
-                      </select>
-                    </>
-                  )}
+                {/* Button to Toggle TTS Controls */}
+                <Button onClick={toggleTTSControls} variant="secondary">
+                  TTS Settings
+                </Button>
 
-                  {/* Speed Control Slider */}
-                        {/*
-                        <label htmlFor="speedControl">Speed:</label>
-                        <input
-                          type="range"
-                          id="speedControl"
-                          min="0.1"
-                          max="1.5"
-                          step="0.1"
-                          value={speechSpeed}
-                          onChange={handleSpeedChange}
-                        />
-                        */}
-                </div>
+                {/* TTS Settings (Initially Hidden) */}
+                {showTTSControls && (
+                  <div className="flex flex-col gap-4">
+                    {typeof window !== 'undefined' && (
+                      <>
+                        <label htmlFor="voiceSelect">Voice:</label>
+                        <select
+                          id="voiceSelect"
+                          className="bg-background border border-input rounded-md px-2 py-1"
+                          value={selectedVoice ? selectedVoice.name : ""}
+                          onChange={handleVoiceChange}
+                        >
+                          {window.speechSynthesis.getVoices()
+                            .filter(voice => voice.lang.startsWith('ja'))
+                            .map((voice) => (
+                              <option key={voice.name} value={voice.name}>
+                                {voice.name}
+                              </option>
+                            ))}
+                        </select>
+                      </>
+                    )}
+                  </div>
+                )}
                 <HintTable />
               </div>
             </DialogContent>
@@ -493,6 +484,7 @@ export default function Home() {
 
         <div className="grid" style={{
           gridTemplateColumns: `repeat(${calculateNumCols()}, minmax(50px, 1fr))`,
+          gridTemplateRows: `repeat(${calculateNumRows()}, minmax(50px, 1fr))`,
           gap: "2px",
           width: "100%",
           maxWidth: `${calculateNumCols() * 60}px`,
@@ -540,5 +532,3 @@ export default function Home() {
     </div>
   );
 }
-
-
