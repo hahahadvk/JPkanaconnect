@@ -161,9 +161,8 @@ export default function Home() {
   useEffect(() => {
     if (grid.length > 0 && grid.filter(tile => !tile.matched && tile.round === currentRound).length === 0) {
       if (currentRound < totalRounds) {
-        //setTimeout(() => {
-        //  setCurrentRound(prev => prev + 1);
-        //}, 1000);
+          // Auto-advance to next round (optional)
+          // setTimeout(() => { setCurrentRound(prev => prev + 1); }, 1000);
       } else {
         setGameWon(true);
       }
@@ -184,55 +183,43 @@ export default function Home() {
     const tilesPerRound = gameSize === "192 Tiles Total" ? 64 : 36;
     const numRounds = gameSize === "192 Tiles Total" ? 3 : 5;
 
-    const characterSet = mode === "hiragana" ? [...basicHiragana, ...diacriticHiragana, ...contractedHiragana] : [...basicKatakana, ...diacriticKatakana, ...contractedKatakana];
-    const totalBasic = basicHiragana.length;
-    const totalDiacritic = diacriticHiragana.length;
-    const totalContracted = contractedHiragana.length;
+      const characterSet = mode === "hiragana" ? [...basicHiragana, ...diacriticHiragana, ...contractedHiragana] : [...basicKatakana, ...diacriticKatakana, ...contractedKatakana];
+      let tempGrid: Tile[] = [];
+      let tileIndex = 0;
 
-    // Distribute the characters across rounds
-    const numBasic = Math.floor(totalBasic / numRounds);
-    const numDiacritic = Math.floor(totalDiacritic / numRounds);
-    const numContracted = Math.floor(totalContracted / numRounds);
+      // Calculate pairs needed from each character set for even distribution
+      const totalChars = characterSet.length;
+      const charsPerRound = Math.floor(totalChars / numRounds);
+      let remainingChars = totalChars % numRounds; // Handle remainder
 
-    let tempGrid: Tile[] = [];
-    let tileIndex = 0;
+      for (let round = 1; round <= numRounds; round++) {
+          let pairsForRound = [];
 
-    for (let round = 1; round <= numRounds; round++) {
-      const roundPairs: { jp: string; rm: string }[] = [];
+          // Take base number of chars for this round
+          for (let i = 0; i < charsPerRound; i++) {
+              pairsForRound.push(characterSet[i]);
+          }
 
-      // Add basic characters to this round's pairs
-      for (let i = 0; i < numBasic; i++) {
-        const char = characterSet[i];
-        roundPairs.push(char);
+          // Distribute remainder chars across first few rounds
+          if (remainingChars > 0) {
+              pairsForRound.push(characterSet[charsPerRound]);
+              remainingChars--;
+          }
+
+          // Ensure total pairs do not exceed tilesPerRound / 2
+          while (pairsForRound.length < tilesPerRound / 2) {
+              const char = characterSet[pairsForRound.length % characterSet.length];
+              pairsForRound.push(char);
+          }
+
+          let tiles: Tile[] = [];
+          pairsForRound.forEach((pair, pairIndex) => {
+              const color = mode === "hiragana" ? warmPalette[pairIndex % warmPalette.length] : coolPalette[pairIndex % coolPalette.length];
+              tiles.push({ index: tileIndex++, content: pair.jp, color: color, selected: false, matched: false, round: round });
+              tiles.push({ index: tileIndex++, content: pair.rm, color: "hsl(var(--cool-3))", selected: false, matched: false, round: round });
+          });
+          tempGrid = [...tempGrid, ...shuffleArray(tiles)];
       }
-
-      // Add diacritic characters to this round's pairs
-      for (let i = 0; i < numDiacritic; i++) {
-        const char = characterSet[basicHiragana.length + i];
-        roundPairs.push(char);
-      }
-
-      // Add contracted characters to this round's pairs
-      for (let i = 0; i < numContracted; i++) {
-        const char = characterSet[basicHiragana.length + diacriticHiragana.length + i];
-        roundPairs.push(char);
-      }
-
-      // Add remaining tiles if there is any
-      while (roundPairs.length < tilesPerRound / 2) {
-          const char = characterSet[roundPairs.length % characterSet.length];
-          roundPairs.push(char);
-      }
-
-      let tiles: Tile[] = [];
-      roundPairs.forEach((pair, pairIndex) => {
-        const color = mode === "hiragana" ? warmPalette[pairIndex % warmPalette.length] : coolPalette[pairIndex % coolPalette.length];
-        tiles.push({ index: tileIndex++, content: pair.jp, color: color, selected: false, matched: false, round: round });
-        tiles.push({ index: tileIndex++, content: pair.rm, color: "hsl(var(--cool-3))", selected: false, matched: false, round: round });
-      });
-      tempGrid = [...tempGrid, ...shuffleArray(tiles)];
-    }
-
     setGrid(tempGrid);
     setGameWon(false);
   }, [gameSize, mode, generateCharacterPairs, warmPalette, coolPalette]);
@@ -286,7 +273,7 @@ export default function Home() {
             contractedHiragana.find(char => char.jp === secondTile.content && char.rm === firstTile.content)))) ||
         (mode === "katakana" &&
           ((basicKatakana.find(char => char.jp === firstTile.content && char.rm === secondTile.content) ||
-            diacriticKatakana.find(char => char.jp === firstTile.content && char.rm === secondTile.content) ||
+            diacriticKatakana.find(char => char.jp === firstTile.content && char.rm === secondTileIndex) ||
             contractedKatakana.find(char => char.jp === firstTile.content && char.rm === secondTile.content)) ||
            (basicKatakana.find(char => char.jp === secondTile.content && char.rm === firstTile.content) ||
             diacriticKatakana.find(char => char.jp === secondTile.content && char.rm === firstTile.content) ||
@@ -437,53 +424,66 @@ export default function Home() {
           </Select>
 
           <Button onClick={handleNewGame}>New Game</Button>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Dialog open={isHintOpen} onOpenChange={setIsHintOpen}>
-                  <DialogContent className="sm:max-w-[625px]" style={{ backgroundColor: 'hsl(var(--hint-panel-background))', color: 'hsl(var(--hint-panel-foreground))', border: '1px solid hsl(var(--hint-panel-border))' }}>
-                    <DialogHeader>
-                      <DialogTitle>Alphabet Hints</DialogTitle>
-                      <DialogDescription>
-                        Click on Japanese characters to hear their pronunciation.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        {/* Voice Selection Dropdown */}
-                        {typeof window !== 'undefined' && (
-                          <>
-                            <label htmlFor="voiceSelect">Voice:</label>
-                            <select
-                              id="voiceSelect"
-                              className="bg-background border border-input rounded-md px-2 py-1"
-                              value={selectedVoice ? selectedVoice.name : ""}
-                              onChange={handleVoiceChange}
-                            >
-                              {window.speechSynthesis.getVoices()
-                                .filter(voice => voice.lang.startsWith('ja'))
-                                .map((voice) => (
-                                  <option key={voice.name} value={voice.name}>
-                                    {voice.name}
-                                  </option>
-                                ))}
-                            </select>
-                          </>
-                        )}
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button onClick={() => setIsHintOpen(true)}>
+                            Hint
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Need a little help? This shows all available characters!</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+          <Dialog open={isHintOpen} onOpenChange={setIsHintOpen}>
+            <DialogContent className="sm:max-w-[625px]" style={{ backgroundColor: 'hsl(var(--hint-panel-background))', color: 'hsl(var(--hint-panel-foreground))', border: '1px solid hsl(var(--hint-panel-border))' }}>
+              <DialogHeader>
+                <DialogTitle>Alphabet Hints</DialogTitle>
+                <DialogDescription>
+                  Click on Japanese characters to hear their pronunciation.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  {typeof window !== 'undefined' && (
+                    <>
+                      <label htmlFor="voiceSelect">Voice:</label>
+                      <select
+                        id="voiceSelect"
+                        className="bg-background border border-input rounded-md px-2 py-1"
+                        value={selectedVoice ? selectedVoice.name : ""}
+                        onChange={handleVoiceChange}
+                      >
+                        {window.speechSynthesis.getVoices()
+                          .filter(voice => voice.lang.startsWith('ja'))
+                          .map((voice) => (
+                            <option key={voice.name} value={voice.name}>
+                              {voice.name}
+                            </option>
+                          ))}
+                      </select>
+                    </>
+                  )}
 
-                        {/* Speed Control Slider */}
-                        
-                      </div>
-                      <HintTable />
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Need a little help? This shows all available characters!</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                  {/* Speed Control Slider */}
+                        {/*
+                        <label htmlFor="speedControl">Speed:</label>
+                        <input
+                          type="range"
+                          id="speedControl"
+                          min="0.1"
+                          max="1.5"
+                          step="0.1"
+                          value={speechSpeed}
+                          onChange={handleSpeedChange}
+                        />
+                        */}
+                </div>
+                <HintTable />
+              </div>
+            </DialogContent>
+          </Dialog>
             {currentRound < totalRounds && !gameWon && (
                 <Button onClick={handleNextRound}>Next Round</Button>
             )}
@@ -540,4 +540,5 @@ export default function Home() {
     </div>
   );
 }
+
 
