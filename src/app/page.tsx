@@ -161,9 +161,9 @@ export default function Home() {
   useEffect(() => {
     if (grid.length > 0 && grid.filter(tile => !tile.matched && tile.round === currentRound).length === 0) {
       if (currentRound < totalRounds) {
-        setTimeout(() => {
-          setCurrentRound(prev => prev + 1);
-        }, 1000);
+        //setTimeout(() => {
+        //  setCurrentRound(prev => prev + 1);
+        //}, 1000);
       } else {
         setGameWon(true);
       }
@@ -380,6 +380,14 @@ export default function Home() {
     const calculateNumCols = () => gameSize === "192 Tiles Total" ? 8 : 6;
     const calculateNumRows = () => gameSize === "192 Tiles Total" ? 8 : 6;
 
+  const handleNextRound = () => {
+    if (currentRound < totalRounds) {
+      setCurrentRound(prev => prev + 1);
+    } else {
+      setGameWon(true);
+    }
+  };
+
   return (
     <div className={`flex flex-col items-center justify-center min-h-screen py-2 ${theme === 'dark' ? 'dark' : ''}`}>
       <header className="w-full flex justify-between items-center p-4">
@@ -450,6 +458,9 @@ export default function Home() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {currentRound < totalRounds && !gameWon && (
+            <Button onClick={handleNextRound}>Next Round</Button>
+          )}
         </div>
 
         {gameWon ? <h2 className="text-2xl font-bold mb-4">Congratulations! You won!</h2> : <h2 className="text-2xl font-bold mb-4">Round {currentRound}/{totalRounds}</h2>}
@@ -503,5 +514,3 @@ export default function Home() {
     </div>
   );
 }
-
-
