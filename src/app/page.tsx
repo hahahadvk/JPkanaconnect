@@ -94,14 +94,14 @@ type CharacterSet = { jp: string; rm: string; }[];
 const warmPalette = ["hsl(var(--warm-1))", "hsl(var(--warm-2))", "hsl(var(--warm-3))", "hsl(var(--warm-4))", "hsl(var(--warm-5))"];
 const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool-3))", "hsl(var(--cool-4))", "hsl(var(--cool-5))"];
 
-const initialGridSize = "15x10";
-const initialGameSize = "300 Tiles Total";
+const initialGridSize = "8x8";
+const initialGameSize = "192 Tiles Total";
 
 type Tile = {
   content: string;
   color: string;
   matched: boolean;
-  round: number; // 1 or 2
+  round: number; // 1, 2, or 3
   index: number;
   selected: boolean;
 };
@@ -117,8 +117,8 @@ export default function Home() {
   const [gameWon, setGameWon] = useState(false);
   const { theme, setTheme: setAppTheme } = useTheme();
   const [isHintOpen, setIsHintOpen] = useState(false);
-  const [currentRound, setCurrentRound] = useState(1); // 1 or 2
-  const totalRounds = 2;
+  const [currentRound, setCurrentRound] = useState(1); // 1, 2, or 3
+  const totalRounds = gameSize === "192 Tiles Total" ? 3 : 5;
 
   // TTS Settings
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
@@ -127,7 +127,7 @@ export default function Home() {
 
   const numRows = parseInt(gridSize.split("x")[0]);
   const numCols = parseInt(gridSize.split("x")[1]);
-  const totalTiles = parseInt(gameSize.split(" ")[0]); // 200 or 300 tiles
+  const totalTiles = parseInt(gameSize.split(" ")[0]); // 192 or 180 tiles
 
   // --- Load settings from local storage on initial render ---
   useEffect(() => {
@@ -187,59 +187,60 @@ export default function Home() {
 
     const tilesPerRound = parseInt(gameSize.split(" ")[0]) / totalRounds;
 
-    // Get all the characters and split into round 1 and round 2.
-    const numUniquePairs = Math.min(Math.floor(tilesPerRound / 2), characterSet.length);
-    const round1Pairs = characterSet.slice(0, numUniquePairs);
-    const round2Pairs = characterSet.slice(numUniquePairs, 2 * numUniquePairs);
+    let allTiles: { content: string; color: string; }[] = [];
+    const numUniquePairs = Math.min(Math.floor(totalTiles / 2), characterSet.length);
+    
+    // Distribute pairs across all rounds
+    const pairsPerRound = Math.floor(numUniquePairs / totalRounds);
+    let remainingPairs = numUniquePairs % totalRounds;
 
-    let round1Tiles: { content: string; color: string; }[] = [];
-    let round2Tiles: { content: string; color: string; }[] = [];
+    for (let round = 1; round <= totalRounds; round++) {
+      let pairsForThisRound = pairsPerRound;
+      if (round <= remainingPairs) {
+        pairsForThisRound++;
+      }
+      
+      const startPairIndex = (round - 1) * pairsPerRound + Math.min(round - 1, remainingPairs);
+      const endPairIndex = startPairIndex + pairsForThisRound;
 
-    const populateTiles = (round: number, targetTiles: { content: string; color: string; }[], pairs: { jp: string, rm: string }[], totalTilesForRound: number) => {
-        let currentTileCount = 0;
-        for (let i = 0; i < pairs.length; i++) {
-            const pair = pairs[i];
-            const warmColor = warmPalette[i % warmPalette.length];
-            const coolColor = coolPalette[i % coolPalette.length];
+      const roundPairs = characterSet.slice(startPairIndex, endPairIndex);
 
-            targetTiles.push({ content: pair.jp, color: warmColor });
-            targetTiles.push({ content: pair.rm, color: coolColor });
-            currentTileCount += 2;
-        }
+      let roundTiles: { content: string; color: string; }[] = [];
+      const populateTiles = (pairs: { jp: string, rm: string }[], totalTilesForRound: number) => {
+          let currentTileCount = 0;
+          for (let i = 0; i < pairs.length; i++) {
+              const pair = pairs[i];
+              const warmColor = warmPalette[i % warmPalette.length];
+              const coolColor = coolPalette[i % coolPalette.length];
 
-        // Fill the rest of the round's tile with characters.
-        while (currentTileCount < totalTilesForRound) {
-            const randomIndex = Math.floor(Math.random() * pairs.length);
-            const randomPair = pairs[randomIndex];
-            targetTiles.push({ content: randomPair.jp, color: warmPalette[targetTiles.length % warmPalette.length] });
-            targetTiles.push({ content: randomPair.rm, color: coolPalette[targetTiles.length % coolPalette.length] });
-            currentTileCount += 2;
-        }
+              roundTiles.push({ content: pair.jp, color: warmColor });
+              roundTiles.push({ content: pair.rm, color: coolColor });
+              currentTileCount += 2;
+          }
+
+          // Fill the rest of the round's tile with characters.
+          while (currentTileCount < totalTilesForRound / totalRounds) {
+              const randomIndex = Math.floor(Math.random() * pairs.length);
+              const randomPair = pairs[randomIndex];
+              roundTiles.push({ content: randomPair.jp, color: warmPalette[roundTiles.length % warmPalette.length] });
+              roundTiles.push({ content: randomPair.rm, color: coolPalette[roundTiles.length % coolPalette.length] });
+              currentTileCount += 2;
+          }
+      }
+
+      populateTiles(roundPairs, tilesPerRound);
+
+      const shuffledRoundTiles = roundTiles.sort(() => Math.random() - 0.5);
+      allTiles = [...allTiles, ...shuffledRoundTiles.slice(0, tilesPerRound)];
     }
 
-    populateTiles(1, round1Tiles, round1Pairs, tilesPerRound);
-    populateTiles(2, round2Tiles, round2Pairs, tilesPerRound);
-
-    const shuffledRound1Tiles = round1Tiles.sort(() => Math.random() - 0.5);
-    const shuffledRound2Tiles = round2Tiles.sort(() => Math.random() - 0.5);
-
-    const initialGrid = [
-      ...shuffledRound1Tiles.slice(0, tilesPerRound).map((tile, index) => ({
+    const initialGrid = allTiles.map((tile, index) => ({
         ...tile,
         matched: false,
-        round: 1,
+        round: Math.ceil((index + 1) / (totalTiles / totalRounds)),
         index: index,
         selected: false
-      })),
-      ...shuffledRound2Tiles.slice(0, tilesPerRound).map((tile, index) => ({
-        ...tile,
-        ...tile,
-        matched: false,
-        round: 2,
-        index: index + tilesPerRound,
-        selected: false
-      }))
-    ];
+    }));
 
     setGrid(initialGrid);
     setSelectedTileIndex(null);
@@ -462,8 +463,8 @@ export default function Home() {
               <SelectValue placeholder="Select Game Size" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="300 Tiles Total">300 Tiles Total</SelectItem>
-              <SelectItem value="200 Tiles Total">200 Tiles Total</SelectItem>
+              <SelectItem value="192 Tiles Total">192 Tiles Total</SelectItem>
+              <SelectItem value="180 Tiles Total">180 Tiles Total</SelectItem>
             </SelectContent>
           </Select>
 
@@ -578,3 +579,4 @@ export default function Home() {
     </div>
   );
 }
+
