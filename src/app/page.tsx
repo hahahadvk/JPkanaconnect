@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft } from "lucide-react";
 
 interface Tile {
   index: number;
@@ -398,6 +399,7 @@ export default function Home() {
                       setSelectedVoice(japaneseVoice);
                   }
               }
+              setSpeechSpeed(0.3);
           }
       }, []);
 
@@ -465,9 +467,17 @@ export default function Home() {
               </DialogHeader>
               <div className="flex flex-col gap-4">
                 {/* Button to Toggle TTS Controls */}
-                <Button onClick={toggleTTSControls} variant="secondary">
-                  TTS Settings
-                </Button>
+                {!showTTSControls ? (
+                   <Button onClick={toggleTTSControls} variant="secondary">
+                      TTS Settings
+                    </Button>
+                  ) : (
+                    <Button onClick={toggleTTSControls} variant="secondary">
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back
+                    </Button>
+                  )
+                }
 
                 {/* TTS Settings (Initially Hidden) */}
                 {showTTSControls && (
@@ -566,4 +576,5 @@ export default function Home() {
     </div>
   );
 }
+
 
