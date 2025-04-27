@@ -156,7 +156,7 @@ export default function Home() {
 
   useEffect(() => {
     startNewGame();
-  }, [mode, gameSize, currentRound]);
+  }, [mode, gameSize]);
 
   useEffect(() => {
     if (grid.length > 0 && grid.filter(tile => !tile.matched && tile.round === currentRound).length === 0) {
@@ -503,4 +503,5 @@ export default function Home() {
     </div>
   );
 }
+
 
