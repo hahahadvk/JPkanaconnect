@@ -121,8 +121,8 @@ export default function Home() {
   const [selectedTiles, setSelectedTiles] = useState<number[]>([]);
   const [mode, setMode] = useState<"hiragana" | "katakana">("hiragana");
   const [gameSize, setGameSize] = useState<"192 Tiles Total" | "180 Tiles Total">("192 Tiles Total");
-    const [currentRound, setCurrentRound] = useState(1);
-    const totalRounds = gameSize === "192 Tiles Total" ? 3 : 5;
+  const [currentRound, setCurrentRound] = useState(1);
+  const totalRounds = gameSize === "192 Tiles Total" ? 3 : 5;
   const [gameWon, setGameWon] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [isHintOpen, setIsHintOpen] = useState(false);
@@ -184,20 +184,46 @@ export default function Home() {
     const tilesPerRound = gameSize === "192 Tiles Total" ? 64 : 36;
     const numRounds = gameSize === "192 Tiles Total" ? 3 : 5;
 
-    let allPairs: { jp: string; rm: string }[] = [];
     const characterSet = mode === "hiragana" ? [...basicHiragana, ...diacriticHiragana, ...contractedHiragana] : [...basicKatakana, ...diacriticKatakana, ...contractedKatakana];
-    const numPairsNeeded = tilesPerRound / 2;
+    const totalBasic = basicHiragana.length;
+    const totalDiacritic = diacriticHiragana.length;
+    const totalContracted = contractedHiragana.length;
 
-    for (let i =0; i < numRounds; i++) {
-      const pairsForRound = generateCharacterPairs(numPairsNeeded, characterSet);
-      allPairs = [...allPairs, ...pairsForRound];
-    }
+    // Distribute the characters across rounds
+    const numBasic = Math.floor(totalBasic / numRounds);
+    const numDiacritic = Math.floor(totalDiacritic / numRounds);
+    const numContracted = Math.floor(totalContracted / numRounds);
 
     let tempGrid: Tile[] = [];
     let tileIndex = 0;
 
     for (let round = 1; round <= numRounds; round++) {
-      const roundPairs = allPairs.slice((round - 1) * tilesPerRound / 2, round * tilesPerRound / 2);
+      const roundPairs: { jp: string; rm: string }[] = [];
+
+      // Add basic characters to this round's pairs
+      for (let i = 0; i < numBasic; i++) {
+        const char = characterSet[i];
+        roundPairs.push(char);
+      }
+
+      // Add diacritic characters to this round's pairs
+      for (let i = 0; i < numDiacritic; i++) {
+        const char = characterSet[basicHiragana.length + i];
+        roundPairs.push(char);
+      }
+
+      // Add contracted characters to this round's pairs
+      for (let i = 0; i < numContracted; i++) {
+        const char = characterSet[basicHiragana.length + diacriticHiragana.length + i];
+        roundPairs.push(char);
+      }
+
+      // Add remaining tiles if there is any
+      while (roundPairs.length < tilesPerRound / 2) {
+          const char = characterSet[roundPairs.length % characterSet.length];
+          roundPairs.push(char);
+      }
+
       let tiles: Tile[] = [];
       roundPairs.forEach((pair, pairIndex) => {
         const color = mode === "hiragana" ? warmPalette[pairIndex % warmPalette.length] : coolPalette[pairIndex % coolPalette.length];
@@ -458,9 +484,9 @@ export default function Home() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {currentRound < totalRounds && !gameWon && (
-            <Button onClick={handleNextRound}>Next Round</Button>
-          )}
+            {currentRound < totalRounds && !gameWon && (
+                <Button onClick={handleNextRound}>Next Round</Button>
+            )}
         </div>
 
         {gameWon ? <h2 className="text-2xl font-bold mb-4">Congratulations! You won!</h2> : <h2 className="text-2xl font-bold mb-4">Round {currentRound}/{totalRounds}</h2>}
@@ -514,3 +540,4 @@ export default function Home() {
     </div>
   );
 }
+
