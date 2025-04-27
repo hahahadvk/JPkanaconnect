@@ -90,7 +90,7 @@ body {
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 216 34% 17%;
+    --border: 216 34% 27%; /* Lighter border for dark mode */
     --input: 216 34% 17%;
     --ring: 224.3 76.3% 48%;
     --chart-1: 220 70% 50%;
@@ -109,7 +109,7 @@ body {
 
     --tile-background: 217.2 32.6% 17.5%; /* Dark mode tile background */
     --tile-text: 210 40% 98%; /* Dark mode tile text */
-    --tile-border: 216 34% 17%; /* Dark mode tile border */
+    --tile-border: 216 34% 27%; /* Lighter border for dark mode */
     --tile-border-width: 1px;
     --tile-selected-background: 224.3 76.3% 48%;
     --tile-selected-text: 0 0% 9%;
@@ -176,3 +176,4 @@ body {
     transform: translate(1px, -2px) rotate(-1deg);
   }
 }
+

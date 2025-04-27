@@ -205,9 +205,9 @@ export default function Home() {
     for (let round = 1; round <= numRounds; round++) {
         let tiles: Tile[] = [];
         for (let i = 0; i < tilesPerRound / 2; i++) {
-            const color = mode === "hiragana" ? warmPalette[i % warmPalette.length] : coolPalette[i % coolPalette.length];
+            const color = mode === "hiragana" ? warmPalette[i % warmPalette.length] : warmPalette[i % warmPalette.length];
             tiles.push({ index: tileIndex++, content: characterSetPairs[i].jp, color: color, selected: false, matched: false, round: round });
-            tiles.push({ index: tileIndex++, content: characterSetPairs[i].rm, color: "hsl(var(--cool-3))", selected: false, matched: false, round: round });
+            tiles.push({ index: tileIndex++, content: characterSetPairs[i].rm, color: mode === "hiragana" ? coolPalette[i % coolPalette.length] : coolPalette[i % coolPalette.length], selected: false, matched: false, round: round });
         }
         tempGrid = [...tempGrid, ...shuffleArray(tiles)];
     }
@@ -324,7 +324,7 @@ export default function Home() {
                         >
                             {char.jp}
                         </button>
-                        <span style={{ color: "hsl(var(--cool-3))" }}>{char.rm}</span>
+                        <span style={{ color: mode === "hiragana" ? "hsl(var(--cool-3))" : "hsl(var(--warm-3))" }}>{char.rm}</span>
                     </div>
                 ))}
             </div>
@@ -365,7 +365,7 @@ export default function Home() {
         {mode === "hiragana" ? (
           <HintContent characters={basicHiragana} speak={speak} palette={hiraganaPalette} />
         ) : (
-          <HintContent characters={basicKatakana} speak={speak} palette={katakanaPalette} />
+          <HintContent characters={basicKatakana} speak={speak} palette={hiraganaPalette} />
         )}
         <div className="flex items-center justify-between">
           <label htmlFor="speedControl">Speed:</label>
