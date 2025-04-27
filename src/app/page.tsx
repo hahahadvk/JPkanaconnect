@@ -127,7 +127,7 @@ export default function Home() {
   const [gameWon, setGameWon] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [isHintOpen, setIsHintOpen] = useState(false);
-  const [speechSpeed, setSpeechSpeed] = useState(0.5);
+  const [speechSpeed, setSpeechSpeed] = useState(0.3);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
   const warmPalette = ["hsl(var(--warm-1))", "hsl(var(--warm-2))", "hsl(var(--warm-3))", "hsl(var(--warm-4))", "hsl(var(--warm-5))"];
   const coolPalette = ["hsl(var(--cool-1))", "hsl(var(--cool-2))", "hsl(var(--cool-3))", "hsl(var(--cool-4))", "hsl(var(--cool-5))"];
@@ -367,18 +367,6 @@ export default function Home() {
         ) : (
           <HintContent characters={basicKatakana} speak={speak} palette={hiraganaPalette} />
         )}
-        <div className="flex items-center justify-between">
-          <label htmlFor="speedControl">Speed:</label>
-          <input
-            type="range"
-            id="speedControl"
-            min="0.1"
-            max="1.5"
-            step="0.1"
-            value={speechSpeed}
-            onChange={handleSpeedChange}
-          />
-        </div>
       </div>
     );
   };
@@ -396,6 +384,40 @@ export default function Home() {
 
     const toggleTTSControls = () => {
         setShowTTSControls(!showTTSControls);
+    };
+
+      useEffect(() => {
+          if (typeof window !== 'undefined') {
+              const voices = window.speechSynthesis.getVoices();
+              const nanamiVoice = voices.find(voice => voice.name === "Microsoft Nanami Online (Natural) - Japanese (Japan)");
+              if (nanamiVoice) {
+                  setSelectedVoice(nanamiVoice);
+              } else {
+                  const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP');
+                  if (japaneseVoice) {
+                      setSelectedVoice(japaneseVoice);
+                  }
+              }
+          }
+      }, []);
+
+    const speak = (text: string) => {
+      if (typeof window !== 'undefined') {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ja-JP';
+        utterance.rate = speechSpeed;
+
+        if (selectedVoice) {
+            utterance.voice = selectedVoice;
+        } else {
+            const voices = window.speechSynthesis.getVoices();
+            const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP');
+            if (japaneseVoice) {
+                utterance.voice = japaneseVoice;
+            }
+        }
+        window.speechSynthesis.speak(utterance);
+      }
     };
 
   return (
@@ -467,6 +489,18 @@ export default function Home() {
                               </option>
                             ))}
                         </select>
+                           <div className="flex items-center justify-between">
+                              <label htmlFor="speedControl">Speed:</label>
+                              <input
+                                type="range"
+                                id="speedControl"
+                                min="0.1"
+                                max="1.5"
+                                step="0.1"
+                                value={speechSpeed}
+                                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSpeechSpeed(parseFloat(event.target.value))}
+                              />
+                            </div>
                       </>
                     )}
                   </div>
@@ -532,3 +566,4 @@ export default function Home() {
     </div>
   );
 }
+
